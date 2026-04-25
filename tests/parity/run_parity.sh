@@ -18,6 +18,13 @@
 #   tests/parity/run_parity.sh              # run all fixtures
 #   tests/parity/run_parity.sh --build      # cargo build first, then run
 #   tests/parity/run_parity.sh --verbose    # print full diff report even on OK
+#   tests/parity/run_parity.sh --strict     # treat any SKIP as a failure
+#
+# Strict mode:
+#   Pass --strict (or set PARITY_STRICT=1 in the environment) to make any
+#   SKIPped fixture escalate to a non-zero exit, in addition to the normal
+#   FAIL and all-skipped gates. Useful in CI where skips should not silently
+#   paper over broken tooling.
 
 set -euo pipefail
 
@@ -27,11 +34,14 @@ set -euo pipefail
 
 BUILD=0
 VERBOSE=0
+# PARITY_STRICT can also be pre-set in the environment (PARITY_STRICT=1).
+STRICT="${PARITY_STRICT:-0}"
 
 for arg in "$@"; do
   case "$arg" in
     --build)   BUILD=1 ;;
     --verbose) VERBOSE=1 ;;
+    --strict)  STRICT=1 ;;
     --help|-h)
       sed -n '2,/^[^#]/{ /^#/{ s/^# \?//; p }; /^[^#]/q }' "$0"
       exit 0
@@ -49,7 +59,7 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-FIXTURES_DIR="$REPO_ROOT/tests/parity/fixtures"
+FIXTURES_DIR="${FIXTURES_DIR:-$REPO_ROOT/tests/parity/fixtures}"
 REPORT_DIR="$REPO_ROOT/target/parity-report"
 INGEST_PY="$HOME/.claude/telemetry/ingest.py"
 
@@ -95,8 +105,7 @@ fi
 # Python ingest helper
 #
 # Invokes ingest.py against a single fixture file, writing to the given DB path.
-# We call the module's public API directly rather than the CLI to avoid needing
-# to know the exact CLI flags (which may change between versions).
+# Uses the module's stable public API: ingest.ingest_file(db_path, jsonl_path).
 # ---------------------------------------------------------------------------
 
 python_ingest() {
@@ -106,6 +115,7 @@ python_ingest() {
   python3 - "$fixture" "$db_path" <<'PY'
 import sys
 import os
+import sqlite3
 
 fixture  = sys.argv[1]
 db_path  = sys.argv[2]
@@ -113,43 +123,63 @@ db_path  = sys.argv[2]
 sys.path.insert(0, os.path.expanduser('~/.claude/telemetry'))
 import ingest
 
-# Initialise schema.
-conn = ingest._init_db(db_path)
-
-# Find the ingest-single-file callable (name changed between versions).
-ingest_fn = (
-    getattr(ingest, 'ingest_file', None)
-    or getattr(ingest, '_ingest_file', None)
-)
-if ingest_fn is None:
-    print("ERROR: cannot find ingest_file/_ingest_file in ingest.py", file=sys.stderr)
-    sys.exit(2)
-
-# Call with (conn, path) or (path, conn) — try both signatures.
-try:
-    ingest_fn(conn, fixture)
-except TypeError:
-    ingest_fn(fixture, conn)
-
-conn.commit()
+# ---------------------------------------------------------------------------
+# Workaround: _init_db() uses a process-wide marker file (~/.claude/telemetry/
+# .schema_v4) to decide whether to create the schema.  When the marker already
+# exists (because the developer has run real ingestion before), _init_db()
+# skips _create_schema() entirely — even when db_path is a brand-new empty
+# tempfile.  The subsequent INSERT then fails with:
+#   sqlite3.OperationalError: no such table: events
+#
+# Strategy 2 (chosen because _create_schema uses CREATE TABLE IF NOT EXISTS /
+# CREATE INDEX IF NOT EXISTS throughout the DDL, making it fully idempotent):
+# open the temp DB directly and call _create_schema() to pre-seed the schema
+# before handing control to ingest_file().  This does not touch the marker
+# file and has no side-effects on the user's real sessions database.
+#
+# TODO(parity): fix in ingest.py — _init_db should check sqlite_master for
+# actual table presence, not just the marker file.
+# ---------------------------------------------------------------------------
+conn = sqlite3.connect(db_path, timeout=5.0)
+conn.row_factory = sqlite3.Row
+conn.execute("PRAGMA journal_mode=WAL;")
+conn.execute("PRAGMA busy_timeout=5000;")
+ingest._create_schema(conn)
 conn.close()
+
+# Python contract: ingest.ingest_file(db_path: str, jsonl_path: str) -> int
+ingest.ingest_file(db_path, fixture)
 PY
 }
 
 # ---------------------------------------------------------------------------
-# Main loop
+# Zero-fixtures guard
+#
+# Use nullglob so unmatched globs expand to nothing, then count manually.
+# An empty fixtures directory is always a harness misconfiguration.
 # ---------------------------------------------------------------------------
 
 mkdir -p "$REPORT_DIR"
+
+shopt -s nullglob
+fixture_list=("$FIXTURES_DIR"/*.jsonl "$FIXTURES_DIR"/*.jsonl.gz)
+shopt -u nullglob
+
+if [ "${#fixture_list[@]}" -eq 0 ]; then
+  echo "ERROR: no fixture files found in $FIXTURES_DIR (*.jsonl or *.jsonl.gz)" >&2
+  exit 2
+fi
+
+# ---------------------------------------------------------------------------
+# Main loop
+# ---------------------------------------------------------------------------
 
 TOTAL=0
 FAIL=0
 SKIP=0
 PASS=0
 
-# Iterate over plain JSONL and pre-gzipped fixtures.
-shopt -s nullglob
-for fixture in "$FIXTURES_DIR"/*.jsonl "$FIXTURES_DIR"/*.jsonl.gz; do
+for fixture in "${fixture_list[@]}"; do
   [ -e "$fixture" ] || continue
   name="$(basename "$fixture")"
   TOTAL=$((TOTAL + 1))
@@ -190,7 +220,6 @@ for fixture in "$FIXTURES_DIR"/*.jsonl "$FIXTURES_DIR"/*.jsonl.gz; do
     FAIL=$((FAIL + 1))
   fi
 done
-shopt -u nullglob
 
 # ---------------------------------------------------------------------------
 # Summary
@@ -199,16 +228,33 @@ shopt -u nullglob
 echo ""
 echo "=============================="
 echo "Parity harness summary"
-echo "  Total  : $TOTAL"
-echo "  Passed : $PASS"
-echo "  Failed : $FAIL"
-echo "  Skipped: $SKIP"
+echo "  PASS: $PASS  FAIL: $FAIL  SKIP: $SKIP"
 echo "=============================="
+
+# Determine exit code.
+# Failure conditions:
+#   1. Any fixture diverged (FAIL > 0).
+#   2. No fixture produced a PASS result (all-skipped or zero results).
+#   3. --strict / PARITY_STRICT=1: any SKIP is treated as a failure.
+EXIT_CODE=0
 
 if [ "$FAIL" -gt 0 ]; then
   echo "PARITY FAILED: $FAIL fixture(s) diverged"
-  exit 1
+  EXIT_CODE=1
 fi
 
-echo "PARITY OK"
-exit 0
+if [ "$PASS" -eq 0 ]; then
+  echo "PARITY FAILED: no fixture produced a PASS result (all skipped or empty)" >&2
+  EXIT_CODE=1
+fi
+
+if [ "$STRICT" -eq 1 ] && [ "$SKIP" -gt 0 ]; then
+  echo "PARITY FAILED (strict): $SKIP fixture(s) were skipped — strict mode treats skips as failures" >&2
+  EXIT_CODE=1
+fi
+
+if [ "$EXIT_CODE" -eq 0 ]; then
+  echo "PARITY OK"
+fi
+
+exit "$EXIT_CODE"
