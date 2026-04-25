@@ -1,0 +1,5 @@
+{"v":1,"ts":"2026-04-24T10:00:00.000Z","p":{"hook_event_name":"SessionStart","session_id":"gz-001","cwd":"/tmp/test","model":"claude-sonnet-4-7","permission_mode":"default","source":"startup"}}
+{"v":1,"ts":"2026-04-24T10:00:01.000Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"gz-001","prompt":"Write a hello world function","cwd":"/tmp/test","model":"claude-sonnet-4-7"}}
+{"v":1,"ts":"2026-04-24T10:00:02.000Z","p":{"hook_event_name":"PreToolUse","session_id":"gz-001","tool_name":"Write","tool_use_id":"tool-gz01","tool_input":{"path":"/tmp/test/hello.py","content":"def hello():\n    print('Hello, world!')\n"},"cwd":"/tmp/test"}}
+{"v":1,"ts":"2026-04-24T10:00:02.500Z","p":{"hook_event_name":"PostToolUse","session_id":"gz-001","tool_name":"Write","tool_use_id":"tool-gz01","tool_response":"File written successfully","cwd":"/tmp/test"}}
+{"v":1,"ts":"2026-04-24T10:00:03.000Z","p":{"hook_event_name":"SessionEnd","session_id":"gz-001","reason":"exit","cwd":"/tmp/test","model":"claude-sonnet-4-7"}}

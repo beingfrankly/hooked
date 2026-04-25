@@ -1,0 +1,7 @@
+{"v":1,"ts":"2026-04-24T21:00:00.000Z","h":"a1b2c3d4e5f6a7b8","p":{"hook_event_name":"SessionStart","session_id":"prehash-001","cwd":"/tmp","model":"claude-sonnet-4-7","permission_mode":"default","source":"startup"}}
+{"v":1,"ts":"2026-04-24T21:00:01.000Z","h":"b2c3d4e5f6a7b8c9","p":{"hook_event_name":"UserPromptSubmit","session_id":"prehash-001","prompt":"A prompt with a pre-computed hash","cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T21:00:02.000Z","h":"c3d4e5f6a7b8c9d0","p":{"hook_event_name":"PreToolUse","session_id":"prehash-001","tool_name":"Bash","tool_use_id":"tool-ph01","tool_input":{"command":"echo capture"},"cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T21:00:02.600Z","h":"d4e5f6a7b8c9d0e1","p":{"hook_event_name":"PostToolUse","session_id":"prehash-001","tool_name":"Bash","tool_use_id":"tool-ph01","tool_response":"capture","cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T21:00:03.000Z","h":"e5f6a7b8c9d0e1f2","p":{"hook_event_name":"PreToolUse","session_id":"prehash-001","tool_name":"Read","tool_use_id":"tool-ph02","tool_input":{"path":"/tmp/file.txt"},"cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T21:00:03.700Z","h":"f6a7b8c9d0e1f2a3","p":{"hook_event_name":"PostToolUse","session_id":"prehash-001","tool_name":"Read","tool_use_id":"tool-ph02","tool_response":"file contents here","cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T21:00:04.000Z","h":"a7b8c9d0e1f2a3b4","p":{"hook_event_name":"SessionEnd","session_id":"prehash-001","reason":"exit","cwd":"/tmp"}}

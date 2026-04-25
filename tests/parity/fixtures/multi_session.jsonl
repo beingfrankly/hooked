@@ -1,0 +1,13 @@
+{"v":1,"ts":"2026-04-24T08:00:00.000Z","p":{"hook_event_name":"SessionStart","session_id":"multi-aaa","cwd":"/Users/test/alpha","model":"claude-sonnet-4-7","permission_mode":"default","source":"startup"}}
+{"v":1,"ts":"2026-04-24T08:00:00.100Z","p":{"hook_event_name":"SessionStart","session_id":"multi-bbb","cwd":"/Users/test/beta","model":"claude-sonnet-4-7","permission_mode":"default","source":"startup"}}
+{"v":1,"ts":"2026-04-24T08:00:01.000Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"multi-aaa","prompt":"Alpha session prompt","cwd":"/Users/test/alpha"}}
+{"v":1,"ts":"2026-04-24T08:00:01.500Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"multi-bbb","prompt":"Beta session prompt","cwd":"/Users/test/beta"}}
+{"v":1,"ts":"2026-04-24T08:00:02.000Z","p":{"hook_event_name":"PreToolUse","session_id":"multi-aaa","tool_name":"Bash","tool_use_id":"tool-ma01","tool_input":{"command":"echo alpha"},"cwd":"/Users/test/alpha"}}
+{"v":1,"ts":"2026-04-24T08:00:02.200Z","p":{"hook_event_name":"PreToolUse","session_id":"multi-bbb","tool_name":"Bash","tool_use_id":"tool-mb01","tool_input":{"command":"echo beta"},"cwd":"/Users/test/beta"}}
+{"v":1,"ts":"2026-04-24T08:00:02.500Z","p":{"hook_event_name":"PostToolUse","session_id":"multi-aaa","tool_name":"Bash","tool_use_id":"tool-ma01","tool_response":"alpha","cwd":"/Users/test/alpha"}}
+{"v":1,"ts":"2026-04-24T08:00:02.700Z","p":{"hook_event_name":"PostToolUse","session_id":"multi-bbb","tool_name":"Bash","tool_use_id":"tool-mb01","tool_response":"beta","cwd":"/Users/test/beta"}}
+{"v":1,"ts":"2026-04-24T08:00:03.000Z","p":{"hook_event_name":"SessionStart","session_id":"multi-ccc","cwd":"/Users/test/gamma","model":"claude-opus-4","permission_mode":"bypassPermissions","source":"startup"}}
+{"v":1,"ts":"2026-04-24T08:00:03.500Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"multi-ccc","prompt":"Gamma session prompt","cwd":"/Users/test/gamma"}}
+{"v":1,"ts":"2026-04-24T08:00:04.000Z","p":{"hook_event_name":"SessionEnd","session_id":"multi-aaa","reason":"exit","cwd":"/Users/test/alpha"}}
+{"v":1,"ts":"2026-04-24T08:00:04.500Z","p":{"hook_event_name":"SessionEnd","session_id":"multi-bbb","reason":"logout","cwd":"/Users/test/beta"}}
+{"v":1,"ts":"2026-04-24T08:00:05.000Z","p":{"hook_event_name":"SessionEnd","session_id":"multi-ccc","reason":"exit","cwd":"/Users/test/gamma"}}

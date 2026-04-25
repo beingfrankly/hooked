@@ -1,0 +1,8 @@
+{"v":1,"ts":"2026-04-24T12:00:00.000Z","p":{"hook_event_name":"SessionStart","session_id":"slash-001","cwd":"/Users/test/project","model":"claude-sonnet-4-7","permission_mode":"default","source":"startup"}}
+{"v":1,"ts":"2026-04-24T12:00:01.000Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"slash-001","prompt":"/help","cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T12:00:02.000Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"slash-001","prompt":"/clear","cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T12:00:03.000Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"slash-001","prompt":"/model claude-opus-4","cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T12:00:04.000Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"slash-001","prompt":"/cost","cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T12:00:05.000Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"slash-001","prompt":"This is a normal prompt, not a slash command","cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T12:00:06.000Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"slash-001","prompt":"/review the code","cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T12:00:07.000Z","p":{"hook_event_name":"SessionEnd","session_id":"slash-001","reason":"exit","cwd":"/Users/test/project"}}

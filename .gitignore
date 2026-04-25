@@ -1,0 +1,8 @@
+/target
+*.swp
+.DS_Store
+
+# Mutation testing output
+mutants-focused.out/
+mutants.out/
+mutants.out.old/

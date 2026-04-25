@@ -1,0 +1,8 @@
+{"v":1,"ts":"2026-04-24T20:00:00.000Z","p":{"hook_event_name":"SessionStart","session_id":"utf8-001","cwd":"/Users/tëst/projëct","model":"claude-sonnet-4-7","source":"startup"}}
+{"v":1,"ts":"2026-04-24T20:00:01.000Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"utf8-001","prompt":"Écrivez une fonction qui affiche 'Bonjour le monde'","cwd":"/Users/tëst/projëct"}}
+{"v":1,"ts":"2026-04-24T20:00:02.000Z","p":{"hook_event_name":"PreToolUse","session_id":"utf8-001","tool_name":"Write","tool_use_id":"tool-u01","tool_input":{"path":"/tmp/bonjour.py","content":"# 日本語コメント\ndef bonjour():\n    print('Bonjour le monde 🔥')\n"},"cwd":"/Users/tëst/projëct"}}
+{"v":1,"ts":"2026-04-24T20:00:02.500Z","p":{"hook_event_name":"PostToolUse","session_id":"utf8-001","tool_name":"Write","tool_use_id":"tool-u01","tool_response":"File written","cwd":"/Users/tëst/projëct"}}
+{"v":1,"ts":"2026-04-24T20:00:03.000Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"utf8-001","prompt":"日本語でテストを書いてください","cwd":"/Users/tëst/projëct"}}
+{"v":1,"ts":"2026-04-24T20:00:04.000Z","p":{"hook_event_name":"PreToolUse","session_id":"utf8-001","tool_name":"Bash","tool_use_id":"tool-u02","tool_input":{"command":"echo '🔥 火 火 fire'"},"cwd":"/Users/tëst/projëct"}}
+{"v":1,"ts":"2026-04-24T20:00:04.300Z","p":{"hook_event_name":"PostToolUseFailure","session_id":"utf8-001","tool_name":"Bash","tool_use_id":"tool-u02","error":"エラー: permission denied ❌","cwd":"/Users/tëst/projëct"}}
+{"v":1,"ts":"2026-04-24T20:00:05.000Z","p":{"hook_event_name":"SessionEnd","session_id":"utf8-001","reason":"exit","cwd":"/Users/tëst/projëct"}}

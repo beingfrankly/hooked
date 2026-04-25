@@ -1,0 +1,8 @@
+{"v":1,"ts":"2026-04-24T18:00:00.000Z","p":{"hook_event_name":"SessionStart","session_id":"dedup-001","cwd":"/tmp","model":"claude-sonnet-4-7","source":"startup"}}
+{"v":1,"ts":"2026-04-24T18:00:01.000Z","p":{"hook_event_name":"PreToolUse","session_id":"dedup-001","tool_name":"Bash","tool_use_id":"tool-dup01","tool_input":{"command":"echo first"},"cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T18:00:01.000Z","p":{"hook_event_name":"PreToolUse","session_id":"dedup-001","tool_name":"Bash","tool_use_id":"tool-dup01","tool_input":{"command":"echo first (duplicate envelope — same session_id, event_type, ts, tool_use_id)"},"cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T18:00:02.000Z","p":{"hook_event_name":"PostToolUse","session_id":"dedup-001","tool_name":"Bash","tool_use_id":"tool-dup01","tool_response":"first","cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T18:00:03.000Z","p":{"hook_event_name":"PreToolUse","session_id":"dedup-001","tool_name":"Read","tool_use_id":"tool-dup02","tool_input":{"path":"/tmp/x"},"cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T18:00:03.000Z","p":{"hook_event_name":"PreToolUse","session_id":"dedup-001","tool_name":"Read","tool_use_id":"tool-dup02","tool_input":{"path":"/tmp/x (second delivery — dedup should drop this)"},"cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T18:00:03.500Z","p":{"hook_event_name":"PostToolUse","session_id":"dedup-001","tool_name":"Read","tool_use_id":"tool-dup02","tool_response":"contents","cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T18:00:04.000Z","p":{"hook_event_name":"SessionEnd","session_id":"dedup-001","reason":"exit","cwd":"/tmp"}}

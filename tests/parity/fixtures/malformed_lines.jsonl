@@ -1,0 +1,9 @@
+{"v":1,"ts":"2026-04-24T16:00:00.000Z","p":{"hook_event_name":"SessionStart","session_id":"malform-001","cwd":"/tmp","model":"claude-sonnet-4-7","source":"startup"}}
+{broken json this should be skipped by the parser
+{"v":1,"ts":"2026-04-24T16:00:01.000Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"malform-001","prompt":"A valid line after a broken one"}}
+
+
+{"v":1,"ts":"2026-04-24T16:00:02.000Z","p":{"hook_event_name":"PreToolUse","session_id":"malform-001","tool_name":"Bash","tool_use_id":"tool-ml01","tool_input":{"command":"echo ok"}}}
+{"v":1,"ts":"2026-04-24T16:00:02.200Z","p":{"hook_event_name":"PostToolUse","session_id":"malform-001","tool_name":"Bash","tool_use_id":"tool-ml01","tool_response":"ok"}}
+not json at all, just plain text
+{"v":1,"ts":"2026-04-24T16:00:03.000Z","p":{"hook_event_name":"SessionEnd","session_id":"malform-001","reason":"exit","cwd":"/tmp"}}

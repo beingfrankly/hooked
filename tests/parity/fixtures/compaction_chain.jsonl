@@ -1,0 +1,9 @@
+{"v":1,"ts":"2026-04-24T09:00:00.000Z","p":{"hook_event_name":"SessionStart","session_id":"compact-001","cwd":"/Users/test/project","model":"claude-sonnet-4-7","permission_mode":"default","source":"startup"}}
+{"v":1,"ts":"2026-04-24T09:00:01.000Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"compact-001","prompt":"Start a long task","cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T09:00:02.000Z","p":{"hook_event_name":"PreToolUse","session_id":"compact-001","tool_name":"Bash","tool_use_id":"tool-c01","tool_input":{"command":"echo test"},"cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T09:00:02.800Z","p":{"hook_event_name":"PostToolUse","session_id":"compact-001","tool_name":"Bash","tool_use_id":"tool-c01","tool_response":"test","cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T09:00:05.000Z","p":{"hook_event_name":"PreCompact","session_id":"compact-001","trigger":"auto","cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T09:00:05.100Z","p":{"hook_event_name":"SessionEnd","session_id":"compact-001","reason":"compact","cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T09:00:05.200Z","p":{"hook_event_name":"SessionStart","session_id":"compact-001","cwd":"/Users/test/project","model":"claude-sonnet-4-7","permission_mode":"default","source":"compact"}}
+{"v":1,"ts":"2026-04-24T09:00:06.000Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"compact-001","prompt":"Continue the task","cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T09:00:07.000Z","p":{"hook_event_name":"SessionEnd","session_id":"compact-001","reason":"exit","cwd":"/Users/test/project"}}

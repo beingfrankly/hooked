@@ -1,0 +1,8 @@
+{"v":1,"ts":"2026-04-24T10:00:00.000001Z","p":{"hook_event_name":"SessionStart","session_id":"subsec-001","cwd":"/tmp","model":"claude-sonnet-4-7","source":"startup"}}
+{"v":1,"ts":"2026-04-24T10:00:00.123456Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"subsec-001","prompt":"First prompt","cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T10:00:00.123456Z","p":{"hook_event_name":"PreToolUse","session_id":"subsec-001","tool_name":"Bash","tool_use_id":"tool-ss01","tool_input":{"command":"echo a"},"cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T10:00:00.500000Z","p":{"hook_event_name":"PostToolUse","session_id":"subsec-001","tool_name":"Bash","tool_use_id":"tool-ss01","tool_response":"a","cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T10:00:00.500001Z","p":{"hook_event_name":"PreToolUse","session_id":"subsec-001","tool_name":"Bash","tool_use_id":"tool-ss02","tool_input":{"command":"echo b"},"cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T10:00:00.500001Z","p":{"hook_event_name":"PostToolUse","session_id":"subsec-001","tool_name":"Bash","tool_use_id":"tool-ss02","tool_response":"b","cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T10:00:00.999999Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"subsec-001","prompt":"Second prompt at near-second boundary","cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T10:00:01.000000Z","p":{"hook_event_name":"SessionEnd","session_id":"subsec-001","reason":"exit","cwd":"/tmp"}}

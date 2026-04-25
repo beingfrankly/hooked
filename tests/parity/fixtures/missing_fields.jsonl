@@ -1,0 +1,9 @@
+{"v":1,"ts":"2026-04-24T15:00:00.000Z","p":{"hook_event_name":"SessionStart","session_id":"miss-001"}}
+{"v":1,"ts":"2026-04-24T15:00:01.000Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"miss-001","prompt":"A prompt with no cwd or model"}}
+{"v":1,"ts":"2026-04-24T15:00:02.000Z","p":{"hook_event_name":"PreToolUse","session_id":"miss-001","tool_name":"Bash","tool_use_id":"tool-m01","tool_input":{"command":"echo hi"}}}
+{"v":1,"ts":"2026-04-24T15:00:02.400Z","p":{"hook_event_name":"PostToolUse","session_id":"miss-001","tool_name":"Bash","tool_use_id":"tool-m01","tool_response":"hi"}}
+{"v":1,"ts":"2026-04-24T15:00:03.000Z","p":{"hook_event_name":"SessionEnd","session_id":"miss-001"}}
+{"v":1,"ts":"2026-04-24T15:01:00.000Z","p":{"hook_event_name":"SessionStart","session_id":"miss-002","cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T15:01:01.000Z","p":{"hook_event_name":"PreToolUse","session_id":"miss-002","tool_name":"Write","tool_use_id":"tool-m02","tool_input":{"path":"/tmp/x","content":"y"}}}
+{"v":1,"ts":"2026-04-24T15:01:01.300Z","p":{"hook_event_name":"PostToolUse","session_id":"miss-002","tool_name":"Write","tool_use_id":"tool-m02"}}
+{"v":1,"ts":"2026-04-24T15:01:02.000Z","p":{"hook_event_name":"SessionEnd","session_id":"miss-002","cwd":"/tmp"}}

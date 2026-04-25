@@ -1,0 +1,10 @@
+{"v":1,"ts":"2026-04-24T19:00:00.000Z","p":{"hook_event_name":"SessionStart","session_id":"float-001","cwd":"/tmp","model":"claude-sonnet-4-7","source":"startup"}}
+{"v":1,"ts":"2026-04-24T19:00:01.000Z","p":{"hook_event_name":"PreToolUse","session_id":"float-001","tool_name":"compute","tool_use_id":"tool-fl01","tool_input":{"value":-0.0,"label":"negative zero"},"cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T19:00:01.200Z","p":{"hook_event_name":"PostToolUse","session_id":"float-001","tool_name":"compute","tool_use_id":"tool-fl01","tool_response":"ok","cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T19:00:02.000Z","p":{"hook_event_name":"PreToolUse","session_id":"float-001","tool_name":"compute","tool_use_id":"tool-fl02","tool_input":{"value":1e100,"label":"very large exponent"},"cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T19:00:02.200Z","p":{"hook_event_name":"PostToolUse","session_id":"float-001","tool_name":"compute","tool_use_id":"tool-fl02","tool_response":"ok","cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T19:00:03.000Z","p":{"hook_event_name":"PreToolUse","session_id":"float-001","tool_name":"compute","tool_use_id":"tool-fl03","tool_input":{"value":1.23456789e-10,"label":"small exponent"},"cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T19:00:03.200Z","p":{"hook_event_name":"PostToolUse","session_id":"float-001","tool_name":"compute","tool_use_id":"tool-fl03","tool_response":"ok","cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T19:00:04.000Z","p":{"hook_event_name":"PreToolUse","session_id":"float-001","tool_name":"compute","tool_use_id":"tool-fl04","tool_input":{"int_as_float":42,"int_as_int":42,"mixed":[1,2.0,3,4.5]},"cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T19:00:04.200Z","p":{"hook_event_name":"PostToolUse","session_id":"float-001","tool_name":"compute","tool_use_id":"tool-fl04","tool_response":"ok","cwd":"/tmp"}}
+{"v":1,"ts":"2026-04-24T19:00:05.000Z","p":{"hook_event_name":"SessionEnd","session_id":"float-001","reason":"exit","cwd":"/tmp"}}

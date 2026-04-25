@@ -1,0 +1,9 @@
+{"v":1,"ts":"2026-04-24T11:00:00.000Z","p":{"hook_event_name":"SessionStart","session_id":"fail-001","cwd":"/Users/test/project","model":"claude-sonnet-4-7","permission_mode":"default","source":"startup"}}
+{"v":1,"ts":"2026-04-24T11:00:01.000Z","p":{"hook_event_name":"UserPromptSubmit","session_id":"fail-001","prompt":"Run a command that will fail","cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T11:00:02.000Z","p":{"hook_event_name":"PreToolUse","session_id":"fail-001","tool_name":"Bash","tool_use_id":"tool-f01","tool_input":{"command":"cat /nonexistent/file.txt"},"cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T11:00:02.300Z","p":{"hook_event_name":"PostToolUseFailure","session_id":"fail-001","tool_name":"Bash","tool_use_id":"tool-f01","error":"cat: /nonexistent/file.txt: No such file or directory","cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T11:00:03.000Z","p":{"hook_event_name":"PreToolUse","session_id":"fail-001","tool_name":"Read","tool_use_id":"tool-f02","tool_input":{"path":"/also/missing.py"},"cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T11:00:03.200Z","p":{"hook_event_name":"PostToolUseFailure","session_id":"fail-001","tool_name":"Read","tool_use_id":"tool-f02","error":"File not found: /also/missing.py","is_interrupt":false,"cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T11:00:04.000Z","p":{"hook_event_name":"PreToolUse","session_id":"fail-001","tool_name":"Bash","tool_use_id":"tool-f03","tool_input":{"command":"exit 1"},"cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T11:00:04.100Z","p":{"hook_event_name":"PostToolUseFailure","session_id":"fail-001","tool_name":"Bash","tool_use_id":"tool-f03","error":"Process exited with code 1","is_interrupt":true,"cwd":"/Users/test/project"}}
+{"v":1,"ts":"2026-04-24T11:00:05.000Z","p":{"hook_event_name":"SessionEnd","session_id":"fail-001","reason":"exit","cwd":"/Users/test/project"}}

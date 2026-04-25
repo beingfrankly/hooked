@@ -1,0 +1,60 @@
+# pre-commit hooks for hooked.
+# Install once per clone:
+#   pip install pre-commit  (or `brew install pre-commit`)
+#   pre-commit install                  # installs the pre-commit hook
+#   pre-commit install --hook-type pre-push   # installs the pre-push hook
+#
+# Pre-commit (fast): cargo fmt + clippy on every `git commit`.
+# Pre-push  (slow):  full test suite + cargo audit on every `git push`.
+
+repos:
+  # General hygiene (built into pre-commit's standard library).
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=512"]
+
+  # Rust formatting + lint — fast, always on commit.
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt --check
+        description: Verify Rust source is formatted.
+        entry: cargo fmt --check
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: cargo clippy
+        description: Run clippy with -D warnings.
+        entry: cargo clippy --all-targets -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # Slower checks — only on push.
+      - id: cargo-test
+        name: cargo test (--test-threads=1)
+        description: Run the test suite. Tests mutate HOME, so single-threaded.
+        entry: cargo test -- --test-threads=1
+        language: system
+        types: [rust]
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: cargo-audit
+        name: cargo audit
+        description: Scan Cargo.lock against the RustSec advisory DB.
+        entry: cargo audit
+        language: system
+        files: ^Cargo\.(toml|lock)$
+        pass_filenames: false
+        stages: [pre-push]
