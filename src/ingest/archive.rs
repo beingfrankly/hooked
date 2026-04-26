@@ -257,25 +257,6 @@ mod tests {
     use super::*;
 
     // -----------------------------------------------------------------------
-    // Test helpers
-    // -----------------------------------------------------------------------
-
-    /// Run a closure with `HOME` set to `home_dir`, restoring afterwards.
-    /// Must be called in a single-threaded test context.
-    fn with_home<F: FnOnce()>(home_dir: &Path, f: F) {
-        let original = std::env::var_os("HOME");
-        // SAFETY: only used in single-threaded test context (--test-threads=1).
-        unsafe {
-            std::env::set_var("HOME", home_dir);
-        }
-        f();
-        match original {
-            Some(v) => unsafe { std::env::set_var("HOME", v) },
-            None => unsafe { std::env::remove_var("HOME") },
-        }
-    }
-
-    // -----------------------------------------------------------------------
     // archive_plain_jsonl
     // -----------------------------------------------------------------------
 
@@ -293,7 +274,7 @@ mod tests {
         let original_content = b"{\"v\":1,\"ts\":\"2024-01-01T00:00:00Z\",\"p\":{}}\n";
         std::fs::write(&src, original_content).expect("write src");
 
-        with_home(&home, || {
+        crate::test_utils::with_fake_home(&home, || {
             let dst = archive_jsonl(&src).expect("archive_jsonl");
 
             // Archive file should exist.
@@ -341,7 +322,7 @@ mod tests {
         let src = logs_dir.join("hook_logs_2024-06-15.jsonl");
         std::fs::write(&src, &original).expect("write src");
 
-        with_home(&home, || {
+        crate::test_utils::with_fake_home(&home, || {
             let dst = archive_jsonl(&src).expect("archive_jsonl");
 
             let gz_bytes = std::fs::read(&dst).expect("read gz");
@@ -370,7 +351,7 @@ mod tests {
         let logs_dir = home.join(".claude/telemetry/logs");
         std::fs::create_dir_all(&logs_dir).expect("create logs dir");
 
-        with_home(&home, || {
+        crate::test_utils::with_fake_home(&home, || {
             // First call.
             let src = logs_dir.join("hook_logs_2024-07-01.jsonl");
             std::fs::write(&src, b"first content\n").expect("write first");
@@ -403,7 +384,7 @@ mod tests {
     #[test]
     fn lock_smoke() {
         let tmp = TempDir::new().expect("tempdir");
-        with_home(tmp.path(), || {
+        crate::test_utils::with_fake_home(tmp.path(), || {
             let lock = IngestLock::acquire().expect("acquire");
             assert!(lock.is_some(), "must acquire on first call");
             drop(lock);
@@ -433,7 +414,7 @@ mod tests {
     #[test]
     fn lock_exclusive_blocks_second_try_acquire() {
         let tmp = TempDir::new().expect("tempdir");
-        with_home(tmp.path(), || {
+        crate::test_utils::with_fake_home(tmp.path(), || {
             // First acquire — should succeed.
             let first = IngestLock::try_acquire().expect("first try_acquire");
             assert!(first.is_some(), "first try_acquire must succeed");
@@ -458,7 +439,7 @@ mod tests {
     #[test]
     fn lock_released_on_drop() {
         let tmp = TempDir::new().expect("tempdir");
-        with_home(tmp.path(), || {
+        crate::test_utils::with_fake_home(tmp.path(), || {
             {
                 let lock = IngestLock::try_acquire().expect("first acquire");
                 assert!(lock.is_some(), "first acquire must succeed");

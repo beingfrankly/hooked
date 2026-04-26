@@ -19,6 +19,8 @@ pub mod paths;
 pub mod render;
 pub mod schema;
 // pub mod error;   // add when we introduce the shared error enum
+#[cfg(test)]
+mod test_utils;
 
 pub fn run(cli: cli::Cli) -> anyhow::Result<()> {
     let fmt = cli.effective_format();

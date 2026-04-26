@@ -184,6 +184,27 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_events_dedup ON events(event_hash);
 ";
 
 // ---------------------------------------------------------------------------
+// Required tables (must be kept in sync with SCHEMA_V4_DDL)
+// ---------------------------------------------------------------------------
+
+/// The set of tables (and virtual tables) that must be present in the DB for
+/// the schema to be considered fully initialised.  `events_fts` is registered
+/// in `sqlite_master` as a virtual table with `type = 'table'`, so it is
+/// included here alongside the regular tables.
+///
+/// **Keep in sync with `SCHEMA_V4_DDL`.**  If a new table is added to the DDL
+/// it must be added here so that the integrity check in `init_db` catches any
+/// divergence between the marker file and the actual DB shape.
+const REQUIRED_TABLES: &[&str] = &[
+    "events",
+    "sessions",
+    "tool_calls",
+    "config_versions",
+    "annotations",
+    "events_fts",
+];
+
+// ---------------------------------------------------------------------------
 // Database initialisation
 // ---------------------------------------------------------------------------
 
@@ -197,15 +218,33 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_events_dedup ON events(event_hash);
 ///   does not equal `"v4"`.
 /// - Writes `"v4"` (no trailing newline, matching Python's `write_text`)
 ///   into `.schema_v4` after successful DDL execution.
+///
+/// # 3-way decision
+///
+/// 1. Marker missing **or** marker content != `SCHEMA_VERSION`:
+///    → run DDL, write marker (normal first-run path).
+/// 2. Marker matches `SCHEMA_VERSION` **and** all [`REQUIRED_TABLES`] are
+///    present in `sqlite_master`:
+///    → fast-path; nothing more to do.
+/// 3. Marker matches `SCHEMA_VERSION` **but** at least one required table is
+///    absent from `sqlite_master`:
+///    → return `Err` with an actionable message naming the missing tables and
+///      the marker path so the operator knows what to inspect and how to
+///      recover.
 pub fn init_db(db_path: &Path) -> anyhow::Result<()> {
+    assert!(
+        !REQUIRED_TABLES.is_empty(),
+        "REQUIRED_TABLES must not be empty"
+    );
+
     let marker = schema_marker();
 
     // Mirror Python: `not marker.exists() or marker.read_text().strip() != SCHEMA_VERSION`
-    let needs_init = !marker.exists()
-        || fs::read_to_string(&marker)
+    let marker_matches = marker.exists()
+        && fs::read_to_string(&marker)
             .unwrap_or_default()
             .trim()
-            .ne(SCHEMA_VERSION);
+            .eq(SCHEMA_VERSION);
 
     let conn = Connection::open(db_path)
         .with_context(|| format!("failed to open database at {}", db_path.display()))?;
@@ -214,7 +253,8 @@ pub fn init_db(db_path: &Path) -> anyhow::Result<()> {
     conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")
         .context("failed to set WAL/busy_timeout pragmas")?;
 
-    if needs_init {
+    if !marker_matches {
+        // Case 1: marker absent or stale — run DDL and write marker.
         conn.execute_batch(SCHEMA_V4_DDL)
             .context("failed to execute schema DDL")?;
 
@@ -226,6 +266,41 @@ pub fn init_db(db_path: &Path) -> anyhow::Result<()> {
         }
         fs::write(&marker, SCHEMA_VERSION)
             .with_context(|| format!("failed to write schema marker at {}", marker.display()))?;
+    } else {
+        // Marker matches SCHEMA_VERSION — cross-check against sqlite_master.
+        // Fetch the full set of table/view names in one query.
+        let mut stmt = conn
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')",
+            )
+            .context("failed to prepare sqlite_master query")?;
+
+        let existing: std::collections::HashSet<String> = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .context("failed to query sqlite_master")?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        let missing: Vec<&str> = REQUIRED_TABLES
+            .iter()
+            .copied()
+            .filter(|t| !existing.contains(*t))
+            .collect();
+
+        if !missing.is_empty() {
+            // Case 3: marker claims schema is ready, but DB is incomplete.
+            let missing_list = missing.join(", ");
+            anyhow::bail!(
+                "schema marker at '{}' claims version '{}' but the database is \
+                 missing required tables: {missing_list}. \
+                 Either delete the schema marker at '{}' to force re-init, \
+                 or run `hooked rebuild` to drop and recreate the database.",
+                marker.display(),
+                SCHEMA_VERSION,
+                marker.display(),
+            );
+        }
+        // Case 2: marker matches and all tables present — fast-path, nothing to do.
     }
 
     Ok(())
@@ -407,5 +482,58 @@ mod tests {
     fn schema_marker_content_is_schema_version() {
         // Mirror Python: marker.write_text(SCHEMA_VERSION) → content is "v4" (no newline).
         assert_eq!(SCHEMA_VERSION, "v4");
+    }
+
+    /// Regression guard for the upstream Python `_init_db` marker bug:
+    /// when the marker file is present and matches `SCHEMA_VERSION` but the
+    /// actual SQLite DB is missing required tables, `init_db` must return an
+    /// explicit `Err` rather than silently succeeding or re-running DDL.
+    #[test]
+    fn init_db_errors_when_marker_present_but_tables_missing() {
+        let fake_home_dir = tempfile::tempdir().expect("failed to create tempdir for fake home");
+        let fake_home = fake_home_dir.path().to_str().expect("tempdir path is UTF-8");
+
+        // Redirect HOME so schema_marker() points into our tempdir.
+        crate::test_utils::with_fake_home(fake_home, || {
+            // Create the telemetry directory tree under fake $HOME.
+            let telemetry_dir = fake_home_dir
+                .path()
+                .join(".claude")
+                .join("telemetry");
+            std::fs::create_dir_all(&telemetry_dir)
+                .expect("failed to create fake telemetry dir");
+
+            // Write the marker file with the current SCHEMA_VERSION.
+            let marker_path = telemetry_dir.join(".schema_v4");
+            std::fs::write(&marker_path, SCHEMA_VERSION)
+                .expect("failed to write fake marker");
+
+            // Create an empty SQLite file — no DDL applied, so no tables exist.
+            let db_dir = tempfile::tempdir().expect("failed to create tempdir for db");
+            let db_path = db_dir.path().join("empty.db");
+            // Opening (and immediately closing) the file creates an empty SQLite DB.
+            Connection::open(&db_path).expect("failed to open empty DB");
+
+            // init_db must return Err because the marker is present but tables are missing.
+            let result = init_db(&db_path);
+            assert!(
+                result.is_err(),
+                "expected init_db to return Err when marker is present but tables are missing"
+            );
+
+            let err_msg = format!("{:#}", result.unwrap_err());
+            assert!(
+                err_msg.contains("missing required tables"),
+                "error message should contain 'missing required tables', got: {err_msg}"
+            );
+            // Verify that at least one of the required table names is mentioned.
+            let names_any = REQUIRED_TABLES
+                .iter()
+                .any(|t| err_msg.contains(t));
+            assert!(
+                names_any,
+                "error message should name at least one required table, got: {err_msg}"
+            );
+        });
     }
 }

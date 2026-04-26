@@ -184,7 +184,6 @@ pub fn rebuild(args: &RebuildArgs) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
     use std::io::Write as _;
 
     use flate2::write::GzEncoder;
@@ -193,19 +192,6 @@ mod tests {
     use super::*;
     use crate::cli::RebuildArgs;
     use crate::ingest::archive::IngestLock;
-
-    /// Run a closure with `HOME` set to `fake_home`, restoring the original
-    /// value afterwards. NOT thread-safe — use `--test-threads=1`.
-    fn with_home<F: FnOnce()>(fake_home: &str, f: F) {
-        let original = env::var_os("HOME");
-        // SAFETY: single-threaded test context (--test-threads=1).
-        unsafe { env::set_var("HOME", fake_home) };
-        f();
-        match original {
-            Some(v) => unsafe { env::set_var("HOME", v) },
-            None => unsafe { env::remove_var("HOME") },
-        }
-    }
 
     // -----------------------------------------------------------------------
     // rebuild_with_no_archives
@@ -216,7 +202,7 @@ mod tests {
     #[test]
     fn rebuild_with_no_archives() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path().to_str().unwrap(), || {
             let args = RebuildArgs {
                 since: None,
                 yes: true,
@@ -249,7 +235,7 @@ mod tests {
     #[test]
     fn rebuild_with_one_archive() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path().to_str().unwrap(), || {
             // Create archive dir.
             let arc_dir = paths::archive_dir();
             std::fs::create_dir_all(&arc_dir).expect("create archive dir");
@@ -294,7 +280,7 @@ mod tests {
     #[test]
     fn rebuild_acquires_lock() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path().to_str().unwrap(), || {
             // Pre-acquire the lock.
             let _held = IngestLock::try_acquire()
                 .expect("try_acquire")

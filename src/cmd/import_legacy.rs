@@ -587,26 +587,13 @@ mod tests {
     use crate::cli::ImportLegacyArgs;
 
     // -----------------------------------------------------------------------
-    // Helper: set HOME env var (NOT thread-safe).
-    // -----------------------------------------------------------------------
-    fn with_home<F: FnOnce()>(fake_home: &str, f: F) {
-        let original = std::env::var_os("HOME");
-        unsafe { std::env::set_var("HOME", fake_home) };
-        f();
-        match original {
-            Some(v) => unsafe { std::env::set_var("HOME", v) },
-            None => unsafe { std::env::remove_var("HOME") },
-        }
-    }
-
-    // -----------------------------------------------------------------------
     // import_legacy_no_legacy_db
     // — no legacy DBs / JSONL at all → Ok(()) with 0 rows.
     // -----------------------------------------------------------------------
     #[test]
     fn import_legacy_no_legacy_db() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path().to_str().unwrap(), || {
             let args = ImportLegacyArgs {};
             let result = super::import_legacy(&args);
             assert!(
@@ -643,7 +630,7 @@ mod tests {
     #[test]
     fn import_legacy_v3_session_to_v4() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path().to_str().unwrap(), || {
             // Build a legacy DB with an `events` table shaped like old schema.
             let legacy_db = tmp.path().join("legacy_sessions.db");
             {
@@ -695,7 +682,7 @@ mod tests {
     #[test]
     fn import_legacy_v3_event_to_v4() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path().to_str().unwrap(), || {
             let legacy_db = tmp.path().join("legacy_events.db");
             {
                 let conn = Connection::open(&legacy_db).expect("open legacy db");
@@ -743,7 +730,7 @@ mod tests {
     #[test]
     fn import_legacy_jsonl_via_project_dir() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path().to_str().unwrap(), || {
             // Create a per-project legacy logs dir.
             let legacy_logs = tmp
                 .path()

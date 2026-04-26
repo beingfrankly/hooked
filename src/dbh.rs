@@ -465,27 +465,10 @@ pub fn load_envelopes_for_date(date: chrono::NaiveDate) -> anyhow::Result<Vec<En
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
 
     use rusqlite::params;
 
     use crate::schema::SCHEMA_V4_DDL;
-
-    // -----------------------------------------------------------------------
-    // HOME override helper
-    // -----------------------------------------------------------------------
-
-    /// Run `f` with `HOME` pointing at `fake_home`.  Restores original afterwards.
-    /// NOT thread-safe — use `--test-threads=1`.
-    fn with_home<F: FnOnce()>(fake_home: &str, f: F) {
-        let original = env::var_os("HOME");
-        unsafe { env::set_var("HOME", fake_home) };
-        f();
-        match original {
-            Some(v) => unsafe { env::set_var("HOME", v) },
-            None => unsafe { env::remove_var("HOME") },
-        }
-    }
 
     // -----------------------------------------------------------------------
     // open_db tests
@@ -494,7 +477,7 @@ mod tests {
     #[test]
     fn open_db_creates_schema_when_missing() {
         let tmp = tempfile::tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path().to_str().unwrap(), || {
             let conn = open_db().expect("open_db should succeed");
 
             // Verify core tables exist.
@@ -520,7 +503,7 @@ mod tests {
     #[test]
     fn open_db_idempotent() {
         let tmp = tempfile::tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path().to_str().unwrap(), || {
             let conn1 = open_db().expect("first open_db call");
             drop(conn1);
             // Second call should not error.
@@ -540,7 +523,7 @@ mod tests {
     #[test]
     fn auto_ingest_if_stale_when_no_marker() {
         let tmp = tempfile::tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path().to_str().unwrap(), || {
             // No .last_ingest file exists — should trigger auto-ingest.
             let result =
                 auto_ingest_if_stale(DEFAULT_AUTO_INGEST_THRESHOLD).expect("auto_ingest_if_stale");
@@ -555,7 +538,7 @@ mod tests {
     #[test]
     fn auto_ingest_if_stale_skips_when_fresh() {
         let tmp = tempfile::tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path().to_str().unwrap(), || {
             // Create the telemetry dir and a fresh .last_ingest marker.
             let telemetry = crate::paths::telemetry_dir();
             std::fs::create_dir_all(&telemetry).expect("create telemetry dir");
@@ -632,7 +615,7 @@ mod tests {
     #[test]
     fn load_envelopes_for_date_missing_file() {
         let tmp = tempfile::tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path().to_str().unwrap(), || {
             // No JSONL file exists for 2020-01-01.
             let date = chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
             let result = load_envelopes_for_date(date).expect("should not error on missing file");
@@ -643,7 +626,7 @@ mod tests {
     #[test]
     fn load_envelopes_for_date_present() {
         let tmp = tempfile::tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path().to_str().unwrap(), || {
             // Create the log dir and a small JSONL file.
             let log = crate::paths::log_dir();
             std::fs::create_dir_all(&log).expect("create log dir");

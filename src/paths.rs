@@ -161,28 +161,10 @@ pub fn vault_path() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
-
-    /// Helper: run a closure with `HOME` temporarily set to `fake_home`,
-    /// then restore the original value.  Not thread-safe — tests in this
-    /// module must not be run in parallel (use `cargo test -- --test-threads=1`
-    /// if you add more env-mutating tests).
-    fn with_fake_home<F: FnOnce()>(fake_home: &str, f: F) {
-        let original = env::var_os("HOME");
-        // SAFETY: single-threaded test context.
-        unsafe {
-            env::set_var("HOME", fake_home);
-        }
-        f();
-        match original {
-            Some(v) => unsafe { env::set_var("HOME", v) },
-            None => unsafe { env::remove_var("HOME") },
-        }
-    }
 
     #[test]
     fn telemetry_dir_ends_with_expected_segments() {
-        with_fake_home("/tmp/fake-home", || {
+        crate::test_utils::with_fake_home("/tmp/fake-home", || {
             let p = telemetry_dir();
             assert!(
                 p.ends_with(".claude/telemetry"),
@@ -194,7 +176,7 @@ mod tests {
 
     #[test]
     fn log_dir_is_inside_telemetry_dir() {
-        with_fake_home("/tmp/fake-home", || {
+        crate::test_utils::with_fake_home("/tmp/fake-home", || {
             assert!(log_dir().starts_with(telemetry_dir()));
             assert!(log_dir().ends_with("logs"));
         });
@@ -202,7 +184,7 @@ mod tests {
 
     #[test]
     fn archive_dir_is_inside_log_dir() {
-        with_fake_home("/tmp/fake-home", || {
+        crate::test_utils::with_fake_home("/tmp/fake-home", || {
             assert!(archive_dir().starts_with(log_dir()));
             assert!(archive_dir().ends_with("archive"));
         });
@@ -210,28 +192,28 @@ mod tests {
 
     #[test]
     fn db_path_filename_is_sessions_db() {
-        with_fake_home("/tmp/fake-home", || {
+        crate::test_utils::with_fake_home("/tmp/fake-home", || {
             assert_eq!(db_path().file_name().unwrap(), "sessions.db");
         });
     }
 
     #[test]
     fn lock_file_name() {
-        with_fake_home("/tmp/fake-home", || {
+        crate::test_utils::with_fake_home("/tmp/fake-home", || {
             assert_eq!(lock_file().file_name().unwrap(), ".ingest.lock");
         });
     }
 
     #[test]
     fn last_ingest_file_name() {
-        with_fake_home("/tmp/fake-home", || {
+        crate::test_utils::with_fake_home("/tmp/fake-home", || {
             assert_eq!(last_ingest_file().file_name().unwrap(), ".last_ingest");
         });
     }
 
     #[test]
     fn schema_marker_name() {
-        with_fake_home("/tmp/fake-home", || {
+        crate::test_utils::with_fake_home("/tmp/fake-home", || {
             assert_eq!(schema_marker().file_name().unwrap(), ".schema_v4");
         });
     }
@@ -240,7 +222,7 @@ mod tests {
     fn schema_version_matches_marker_filename_suffix() {
         // The marker filename is `.schema_<version>` — keep them in sync.
         let expected_name = format!(".schema_{SCHEMA_VERSION}");
-        with_fake_home("/tmp/fake-home", || {
+        crate::test_utils::with_fake_home("/tmp/fake-home", || {
             assert_eq!(
                 schema_marker().file_name().unwrap().to_string_lossy(),
                 expected_name
@@ -258,7 +240,7 @@ mod tests {
 
     #[test]
     fn log_file_path_inside_log_dir() {
-        with_fake_home("/tmp/fake-home", || {
+        crate::test_utils::with_fake_home("/tmp/fake-home", || {
             let p = log_file_path("2024-01-15");
             assert!(p.starts_with(log_dir()));
             assert_eq!(p.file_name().unwrap(), "hook_logs_2024-01-15.jsonl");
@@ -267,7 +249,7 @@ mod tests {
 
     #[test]
     fn config_files_has_two_entries() {
-        with_fake_home("/tmp/fake-home", || {
+        crate::test_utils::with_fake_home("/tmp/fake-home", || {
             let files = config_files();
             assert_eq!(files.len(), 2);
             assert!(files[0].ends_with(".claude/settings.json"));
@@ -277,7 +259,7 @@ mod tests {
 
     #[test]
     fn vault_path_ends_with_expected_segments() {
-        with_fake_home("/tmp/fake-home", || {
+        crate::test_utils::with_fake_home("/tmp/fake-home", || {
             let p = vault_path();
             assert!(p.starts_with("/tmp/fake-home"));
             assert!(p.ends_with("Sync/Obsidian/Second Brain"));
