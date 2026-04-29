@@ -102,6 +102,12 @@ pub enum Command {
     Slow(SlowArgs),
     /// Estimated token consumption
     Tokens(TokensArgs),
+    /// Initialize the v4 SQLite database and schema marker.
+    ///
+    /// Creates ~/.claude/telemetry/sessions.db and writes the schema marker
+    /// if either is absent.  Idempotent: safe to run on an already-initialized
+    /// database.
+    Init(InitArgs),
     /// Manually trigger ingestion
     Ingest(IngestArgs),
     /// Label the most recent config version
@@ -305,6 +311,10 @@ pub struct TokensArgs {
 // ---------------------------------------------------------------------------
 // L-group: write / admin / ingestion commands
 // ---------------------------------------------------------------------------
+
+/// Args for `init`
+#[derive(Args, Debug, Default)]
+pub struct InitArgs {}
 
 /// Args for `ingest`
 #[derive(Args, Debug)]

@@ -40,6 +40,7 @@ pub fn run(cli: cli::Cli) -> anyhow::Result<i32> {
         Search(a) => { cmd::search(&a, &fmt)?; Ok(0) }
         Configs(a) => { cmd::configs(&a, &fmt)?; Ok(0) }
         Health(a) => { cmd::health(&a, &fmt)?; Ok(0) }
+        Init(a) => { cmd::init(&a)?; Ok(0) }
         Tail(a) => cmd::tail(&a),
         Diff(a) => { cmd::diff(&a, &fmt)?; Ok(0) }
         Trends(a) => { cmd::trends(&a, &fmt)?; Ok(0) }

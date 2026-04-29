@@ -19,29 +19,36 @@
 use std::fs;
 
 use chrono::Utc;
+use rusqlite::OpenFlags;
 
 use crate::cli::{HealthArgs, OutputFormat};
 use crate::cmd::util::fmt_bytes;
-use crate::dbh::open_db;
 use crate::paths::{archive_dir, db_path, last_ingest_file, log_dir, log_file_path};
 use crate::schema::read_schema_marker;
 
 pub fn health(args: &HealthArgs, fmt: &OutputFormat) -> anyhow::Result<()> {
     let mut pairs: Vec<(String, String)> = Vec::new();
 
-    // DB size and path
+    // DB size and path — bail early with a clear message if the DB is absent.
     let db = db_path();
-    if db.exists() {
-        let size = fs::metadata(&db).map(|m| m.len()).unwrap_or(0);
-        pairs.push(("db_size".into(), fmt_bytes(Some(size as i64))));
-        pairs.push(("db_path".into(), db.display().to_string()));
-    } else {
-        pairs.push(("db_size".into(), "not found".into()));
-        pairs.push(("db_path".into(), db.display().to_string()));
+    if !db.exists() {
+        anyhow::bail!("DB not initialized — run `hooked init`");
     }
 
+    let size = fs::metadata(&db).map(|m| m.len()).unwrap_or(0);
+    pairs.push(("db_size".into(), fmt_bytes(Some(size as i64))));
+    pairs.push(("db_path".into(), db.display().to_string()));
+
+    // Open read-only — health must not modify the filesystem.
+    // SQLITE_OPEN_URI is required alongside SQLITE_OPEN_READ_ONLY so that
+    // SQLite accepts the path string in its normal URI-compatible form.
+    let conn_result = rusqlite::Connection::open_with_flags(
+        &db,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
+    );
+
     // Row counts + integrity + schema version + optional chain stats
-    match open_db() {
+    match conn_result {
         Err(e) => {
             pairs.push(("db_error".into(), e.to_string()));
         }
@@ -222,31 +229,51 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
+    use crate::cli::InitArgs;
+
+    /// Helper: initialize the DB inside the current fake-home so that health
+    /// tests which need a DB can get one without calling open_db() directly.
+    fn init_db_for_test() {
+        crate::cmd::init::init(&InitArgs {}).expect("init should succeed in test");
+    }
+
     #[test]
-    fn health_runs_with_empty_tempdir() {
+    fn health_runs_after_init() {
         let tmp = tempdir().expect("tempdir");
         crate::test_utils::with_fake_home(tmp.path(), || {
+            init_db_for_test();
             let args = HealthArgs { chain_stats: false };
             let result = health(&args, &OutputFormat::Table);
-            assert!(result.is_ok(), "health should succeed: {:?}", result);
+            assert!(result.is_ok(), "health should succeed after init: {:?}", result);
         });
     }
 
     #[test]
-    fn health_reports_db_not_found_before_any_data() {
+    fn health_missing_db_returns_error_with_init_hint() {
         let tmp = tempdir().expect("tempdir");
         crate::test_utils::with_fake_home(tmp.path(), || {
             // No DB has been initialised yet.
             let db = db_path();
             assert!(!db.exists(), "DB should not exist in fresh tempdir");
 
-            // health() should still run successfully and say "not found".
             let args = HealthArgs { chain_stats: false };
-            // We capture the run result — it should be Ok.
             let result = health(&args, &OutputFormat::Table);
-            // health opens DB via open_db() which creates it, so after health() the DB exists.
-            // But before opening it should have started as "not found" in the pair list.
-            assert!(result.is_ok());
+
+            // health must return Err when DB is missing.
+            assert!(result.is_err(), "health should fail when DB is absent");
+
+            let msg = format!("{:#}", result.unwrap_err());
+            assert!(
+                msg.contains("DB not initialized"),
+                "error should contain 'DB not initialized'; got: {msg}"
+            );
+            assert!(
+                msg.contains("hooked init"),
+                "error should contain 'hooked init'; got: {msg}"
+            );
+
+            // The DB must NOT have been created as a side effect.
+            assert!(!db.exists(), "health must not create the DB");
         });
     }
 
@@ -254,6 +281,7 @@ mod tests {
     fn health_with_chain_stats_flag() {
         let tmp = tempdir().expect("tempdir");
         crate::test_utils::with_fake_home(tmp.path(), || {
+            init_db_for_test();
             let args = HealthArgs { chain_stats: true };
             let result = health(&args, &OutputFormat::Table);
             assert!(
@@ -268,6 +296,7 @@ mod tests {
     fn health_json_format_produces_valid_json() {
         let tmp = tempdir().expect("tempdir");
         crate::test_utils::with_fake_home(tmp.path(), || {
+            init_db_for_test();
             let args = HealthArgs { chain_stats: false };
             // Just ensure the function completes without error with JSON format.
             let result = health(&args, &OutputFormat::Json);
