@@ -25,9 +25,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::Context;
-use chrono::Utc;
 
 use crate::cli::TailArgs;
+use crate::clock::Clock;
 use crate::paths::log_file_path;
 
 // ---------------------------------------------------------------------------
@@ -44,7 +44,7 @@ static CTRLC_INSTALLED: AtomicBool = AtomicBool::new(false);
 ///
 /// Installs a Ctrl-C handler (idempotent across multiple calls in tests),
 /// then delegates to [`tail_loop`].
-pub fn tail(args: &TailArgs) -> anyhow::Result<i32> {
+pub fn tail(args: &TailArgs, clock: &dyn Clock) -> anyhow::Result<i32> {
     let stop = Arc::new(AtomicBool::new(false));
     let stop_handle = Arc::clone(&stop);
 
@@ -56,7 +56,7 @@ pub fn tail(args: &TailArgs) -> anyhow::Result<i32> {
         .context("install ctrl-c handler")?;
     }
 
-    tail_loop(args, stop)
+    tail_loop(args, stop, clock)
 }
 
 // ---------------------------------------------------------------------------
@@ -67,8 +67,8 @@ pub fn tail(args: &TailArgs) -> anyhow::Result<i32> {
 ///
 /// When the loop exits normally (stop flag set), returns
 /// `Ok(`[`crate::exit::INTERRUPTED`]`)`.
-pub fn tail_loop(args: &TailArgs, stop: Arc<AtomicBool>) -> anyhow::Result<i32> {
-    let today_str = Utc::now().format("%Y-%m-%d").to_string();
+pub fn tail_loop(args: &TailArgs, stop: Arc<AtomicBool>, clock: &dyn Clock) -> anyhow::Result<i32> {
+    let today_str = clock.now_utc().format("%Y-%m-%d").to_string();
     let path = log_file_path(&today_str);
 
     eprintln!("Tailing {} (Ctrl+C to stop)...", path.display());
@@ -190,9 +190,11 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
+    use chrono::TimeZone;
     use tempfile::TempDir;
 
     use super::*;
+    use crate::clock::{FakeClock, SystemClock};
 
     // -----------------------------------------------------------------------
     // test: stop flag set to true before loop → exits immediately
@@ -222,7 +224,8 @@ mod tests {
     fn tail_handles_no_file() {
         let tmp = TempDir::new().expect("tempdir");
         crate::test_utils::with_fake_home(tmp.path(), || {
-            let today_str = Utc::now().format("%Y-%m-%d").to_string();
+            let clock = SystemClock;
+            let today_str = clock.now_utc().format("%Y-%m-%d").to_string();
             let path = log_file_path(&today_str);
             // File must not exist for this test.
             assert!(!path.exists(), "test requires no today JSONL to exist");
@@ -237,6 +240,46 @@ mod tests {
             assert_eq!(
                 seen_lines, 0,
                 "should see 0 existing lines when file absent"
+            );
+        });
+    }
+
+    // -----------------------------------------------------------------------
+    // test: FakeClock — tail_loop resolves log path using injected fixed time
+    // -----------------------------------------------------------------------
+
+    /// Verifies that when a `FakeClock` fixed at 2024-06-15T12:00:00Z is
+    /// injected, `tail_loop` looks for a log file whose name contains
+    /// "2024-06-15".  The stop flag is pre-set so the loop exits immediately
+    /// without sleeping.
+    #[test]
+    fn tail_loop_uses_clock_for_log_path() {
+        use chrono::Utc;
+        let tmp = TempDir::new().expect("tempdir");
+        crate::test_utils::with_fake_home(tmp.path(), || {
+            let fixed = Utc.with_ymd_and_hms(2024, 6, 15, 12, 0, 0).unwrap();
+            let clock = FakeClock::new(fixed);
+
+            // Verify the clock returns the fixed date string.
+            let date_str = clock.now_utc().format("%Y-%m-%d").to_string();
+            assert_eq!(date_str, "2024-06-15");
+
+            // Verify log_file_path with that date string contains "2024-06-15".
+            let path = log_file_path(&date_str);
+            assert!(
+                path.to_string_lossy().contains("2024-06-15"),
+                "expected log path to contain '2024-06-15', got: {}",
+                path.display()
+            );
+
+            // Call tail_loop with stop pre-set — it returns immediately.
+            let args = crate::cli::TailArgs { filter: None };
+            let stop = Arc::new(AtomicBool::new(true));
+            let result = tail_loop(&args, stop, &clock);
+            assert_eq!(
+                result.unwrap(),
+                crate::exit::INTERRUPTED,
+                "pre-set stop should return INTERRUPTED"
             );
         });
     }

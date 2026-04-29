@@ -13,12 +13,12 @@
 use std::path::Path;
 
 use crate::cli::IngestArgs;
+use crate::clock::Clock;
 use crate::dbh::open_db;
 use crate::ingest::{ingest_all_unprocessed, ingest_file};
 use crate::paths::log_dir;
-use chrono::Utc;
 
-pub fn ingest(args: &IngestArgs) -> anyhow::Result<()> {
+pub fn ingest(args: &IngestArgs, clock: &dyn Clock) -> anyhow::Result<()> {
     if !args.files.is_empty() {
         // Per-file mode — mirrors Python: for f in files: n = ingest_file(...)
         let mut conn = open_db()?;
@@ -41,7 +41,7 @@ pub fn ingest(args: &IngestArgs) -> anyhow::Result<()> {
         let mut total = stats.total_events_inserted;
 
         if args.include_today {
-            let today_str = Utc::now().format("%Y-%m-%d").to_string();
+            let today_str = clock.now_utc().format("%Y-%m-%d").to_string();
             let today_p = log_dir().join(format!("hook_logs_{}.jsonl", today_str));
             if today_p.exists() {
                 let mut conn = open_db()?;
@@ -76,6 +76,7 @@ pub fn ingest(args: &IngestArgs) -> anyhow::Result<()> {
 mod tests {
     use super::*;
     use crate::cli::IngestArgs;
+    use crate::clock::SystemClock;
     use tempfile::tempdir;
 
     #[test]
@@ -86,8 +87,9 @@ mod tests {
                 files: vec![],
                 include_today: false,
             };
+            let clock = SystemClock;
             // Should succeed even with empty DB/log dir (nothing to process).
-            let result = ingest(&args);
+            let result = ingest(&args, &clock);
             assert!(
                 result.is_ok(),
                 "ingest with no files should succeed: {:?}",
@@ -104,8 +106,9 @@ mod tests {
                 files: vec!["/nonexistent/path/file.jsonl".to_string()],
                 include_today: false,
             };
+            let clock = SystemClock;
             // Should succeed (errors are reported per-file, not propagated).
-            let result = ingest(&args);
+            let result = ingest(&args, &clock);
             assert!(result.is_ok());
         });
     }
@@ -118,8 +121,9 @@ mod tests {
                 files: vec![],
                 include_today: true,
             };
+            let clock = SystemClock;
             // Today's file doesn't exist — should not error.
-            let result = ingest(&args);
+            let result = ingest(&args, &clock);
             assert!(result.is_ok());
         });
     }

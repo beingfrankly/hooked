@@ -6,6 +6,7 @@
 //! grouping on date to produce daily totals.
 
 use crate::cli::{OutputFormat, SummaryArgs};
+use crate::clock::Clock;
 use crate::dbh;
 use crate::render::{Cell, Row, Table};
 use rusqlite::Connection;
@@ -20,10 +21,10 @@ struct SummaryRow {
     config_versions: i64,
 }
 
-fn run_query(conn: &Connection, days: u32) -> anyhow::Result<Vec<SummaryRow>> {
+fn run_query(conn: &Connection, days: u32, clock: &dyn Clock) -> anyhow::Result<Vec<SummaryRow>> {
     // Python: since = (now - timedelta(days=days)).strftime("%Y-%m-%d")
     let since = {
-        let d = chrono::Utc::now() - chrono::Duration::days(i64::from(days));
+        let d = clock.now_utc() - chrono::Duration::days(i64::from(days));
         d.format("%Y-%m-%d").to_string()
     };
 
@@ -86,10 +87,10 @@ fn build_table(rows: Vec<SummaryRow>) -> Table {
     Table::new(headers, data_rows)
 }
 
-pub fn summary(args: &SummaryArgs, fmt: &OutputFormat) -> anyhow::Result<()> {
+pub fn summary(args: &SummaryArgs, fmt: &OutputFormat, clock: &dyn Clock) -> anyhow::Result<()> {
     let _ = dbh::auto_ingest()?;
     let conn = dbh::open_db()?;
-    let rows = run_query(&conn, args.days)?;
+    let rows = run_query(&conn, args.days, clock)?;
     let table = build_table(rows);
     print!("{}", table.render(fmt));
     Ok(())
@@ -103,6 +104,7 @@ pub fn summary(args: &SummaryArgs, fmt: &OutputFormat) -> anyhow::Result<()> {
 mod tests {
     use super::*;
     use crate::cli::OutputFormat;
+    use crate::clock::SystemClock;
     use crate::schema::SCHEMA_V4_DDL;
     use rusqlite::Connection;
 
@@ -134,7 +136,8 @@ mod tests {
         let conn = in_memory_conn();
         insert_session(&conn, "s1", "2024-01-15T10:00:00Z", 5, 1, 2, Some("v1"));
 
-        let rows = run_query(&conn, 9999).expect("run_query");
+        let clock = SystemClock;
+        let rows = run_query(&conn, 9999, &clock).expect("run_query");
         let table = build_table(rows);
         assert_eq!(
             table.headers,
@@ -153,7 +156,8 @@ mod tests {
     #[test]
     fn handles_empty_result() {
         let conn = in_memory_conn();
-        let rows = run_query(&conn, 7).expect("run_query");
+        let clock = SystemClock;
+        let rows = run_query(&conn, 7, &clock).expect("run_query");
         let table = build_table(rows);
         let out = table.render(&OutputFormat::Table);
         assert_eq!(out, "(no results)");
@@ -168,7 +172,8 @@ mod tests {
         // One session on a different day
         insert_session(&conn, "s3", "2024-01-16T09:00:00Z", 5, 1, 1, Some("v1"));
 
-        let rows = run_query(&conn, 9999).expect("run_query");
+        let clock = SystemClock;
+        let rows = run_query(&conn, 9999, &clock).expect("run_query");
         // Should be ordered DESC by date, so 2024-01-16 first
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].date, "2024-01-16");

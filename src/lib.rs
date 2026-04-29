@@ -7,6 +7,7 @@
 //! - Exit codes from [`exit`]: `SUCCESS` (0), `ERROR` (1), `INTERRUPTED` (130).
 
 pub mod cli;
+pub mod clock;
 pub mod cmd;
 pub mod dbh;
 pub mod enrich;
@@ -24,9 +25,10 @@ mod test_utils;
 
 pub fn run(cli: cli::Cli) -> anyhow::Result<i32> {
     let fmt = cli.effective_format();
+    let clock = crate::clock::SystemClock;
     use cli::Command::*;
     match cli.command {
-        Summary(a) => { cmd::summary(&a, &fmt)?; Ok(0) }
+        Summary(a) => { cmd::summary(&a, &fmt, &clock)?; Ok(0) }
         Sessions(a) => { cmd::sessions(&a, &fmt)?; Ok(0) }
         Session(a) => { cmd::session(&a, &fmt)?; Ok(0) }
         Last(a) => { cmd::last(&a, &fmt)?; Ok(0) }
@@ -41,12 +43,12 @@ pub fn run(cli: cli::Cli) -> anyhow::Result<i32> {
         Configs(a) => { cmd::configs(&a, &fmt)?; Ok(0) }
         Health(a) => { cmd::health(&a, &fmt)?; Ok(0) }
         Init(a) => { cmd::init(&a)?; Ok(0) }
-        Tail(a) => cmd::tail(&a),
+        Tail(a) => cmd::tail(&a, &clock),
         Diff(a) => { cmd::diff(&a, &fmt)?; Ok(0) }
         Trends(a) => { cmd::trends(&a, &fmt)?; Ok(0) }
         Slow(a) => { cmd::slow(&a, &fmt)?; Ok(0) }
         Tokens(a) => { cmd::tokens(&a, &fmt)?; Ok(0) }
-        Ingest(a) => { cmd::ingest(&a)?; Ok(0) }
+        Ingest(a) => { cmd::ingest(&a, &clock)?; Ok(0) }
         Label(a) => { cmd::label(&a)?; Ok(0) }
         Annotate(a) => { cmd::annotate(&a)?; Ok(0) }
         Replay(a) => { cmd::replay(&a, &fmt)?; Ok(0) }
