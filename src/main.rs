@@ -1,6 +1,12 @@
 use clap::Parser as _;
 
-fn main() -> anyhow::Result<()> {
+fn main() {
     let cli = hooked::cli::Cli::parse();
-    hooked::run(cli)
+    match hooked::run(cli) {
+        Ok(code) => std::process::exit(code),
+        Err(e) => {
+            eprintln!("{:?}", e);
+            std::process::exit(hooked::exit::ERROR);
+        }
+    }
 }

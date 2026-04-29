@@ -22,39 +22,39 @@ pub mod schema;
 #[cfg(test)]
 mod test_utils;
 
-pub fn run(cli: cli::Cli) -> anyhow::Result<()> {
+pub fn run(cli: cli::Cli) -> anyhow::Result<i32> {
     let fmt = cli.effective_format();
     use cli::Command::*;
     match cli.command {
-        Summary(a) => cmd::summary(&a, &fmt),
-        Sessions(a) => cmd::sessions(&a, &fmt),
-        Session(a) => cmd::session(&a, &fmt),
-        Last(a) => cmd::last(&a, &fmt),
-        Chain(a) => cmd::chain(&a, &fmt),
-        Tools(a) => cmd::tools(&a, &fmt),
-        Agents(a) => cmd::agents(&a, &fmt),
-        Skills(a) => cmd::skills(&a, &fmt),
-        Failures(a) => cmd::failures(&a, &fmt),
-        BeforeStop(a) => cmd::before_stop(&a, &fmt),
-        Compactions(a) => cmd::compactions(&a, &fmt),
-        Search(a) => cmd::search(&a, &fmt),
-        Configs(a) => cmd::configs(&a, &fmt),
-        Health(a) => cmd::health(&a, &fmt),
+        Summary(a) => { cmd::summary(&a, &fmt)?; Ok(0) }
+        Sessions(a) => { cmd::sessions(&a, &fmt)?; Ok(0) }
+        Session(a) => { cmd::session(&a, &fmt)?; Ok(0) }
+        Last(a) => { cmd::last(&a, &fmt)?; Ok(0) }
+        Chain(a) => { cmd::chain(&a, &fmt)?; Ok(0) }
+        Tools(a) => { cmd::tools(&a, &fmt)?; Ok(0) }
+        Agents(a) => { cmd::agents(&a, &fmt)?; Ok(0) }
+        Skills(a) => { cmd::skills(&a, &fmt)?; Ok(0) }
+        Failures(a) => { cmd::failures(&a, &fmt)?; Ok(0) }
+        BeforeStop(a) => { cmd::before_stop(&a, &fmt)?; Ok(0) }
+        Compactions(a) => { cmd::compactions(&a, &fmt)?; Ok(0) }
+        Search(a) => { cmd::search(&a, &fmt)?; Ok(0) }
+        Configs(a) => { cmd::configs(&a, &fmt)?; Ok(0) }
+        Health(a) => { cmd::health(&a, &fmt)?; Ok(0) }
         Tail(a) => cmd::tail(&a),
-        Diff(a) => cmd::diff(&a, &fmt),
-        Trends(a) => cmd::trends(&a, &fmt),
-        Slow(a) => cmd::slow(&a, &fmt),
-        Tokens(a) => cmd::tokens(&a, &fmt),
-        Ingest(a) => cmd::ingest(&a),
-        Label(a) => cmd::label(&a),
-        Annotate(a) => cmd::annotate(&a),
-        Replay(a) => cmd::replay(&a, &fmt),
-        Prune(a) => cmd::prune(&a),
-        Export(a) => cmd::export(&a),
-        Rebuild(a) => cmd::rebuild(&a),
-        Backup(a) => cmd::backup(&a),
-        Sql(a) => cmd::sql(&a, &fmt),
-        AppendDaily(a) => cmd::append_daily(&a),
-        ImportLegacy(a) => cmd::import_legacy(&a),
+        Diff(a) => { cmd::diff(&a, &fmt)?; Ok(0) }
+        Trends(a) => { cmd::trends(&a, &fmt)?; Ok(0) }
+        Slow(a) => { cmd::slow(&a, &fmt)?; Ok(0) }
+        Tokens(a) => { cmd::tokens(&a, &fmt)?; Ok(0) }
+        Ingest(a) => { cmd::ingest(&a)?; Ok(0) }
+        Label(a) => { cmd::label(&a)?; Ok(0) }
+        Annotate(a) => { cmd::annotate(&a)?; Ok(0) }
+        Replay(a) => { cmd::replay(&a, &fmt)?; Ok(0) }
+        Prune(a) => { cmd::prune(&a)?; Ok(0) }
+        Export(a) => { cmd::export(&a)?; Ok(0) }
+        Rebuild(a) => { cmd::rebuild(&a)?; Ok(0) }
+        Backup(a) => { cmd::backup(&a)?; Ok(0) }
+        Sql(a) => { cmd::sql(&a, &fmt)?; Ok(0) }
+        AppendDaily(a) => { cmd::append_daily(&a)?; Ok(0) }
+        ImportLegacy(a) => { cmd::import_legacy(&a)?; Ok(0) }
     }
 }

@@ -44,7 +44,7 @@ static CTRLC_INSTALLED: AtomicBool = AtomicBool::new(false);
 ///
 /// Installs a Ctrl-C handler (idempotent across multiple calls in tests),
 /// then delegates to [`tail_loop`].
-pub fn tail(args: &TailArgs) -> anyhow::Result<()> {
+pub fn tail(args: &TailArgs) -> anyhow::Result<i32> {
     let stop = Arc::new(AtomicBool::new(false));
     let stop_handle = Arc::clone(&stop);
 
@@ -65,9 +65,9 @@ pub fn tail(args: &TailArgs) -> anyhow::Result<()> {
 
 /// Poll today's JSONL for new lines until `stop` is set to `true`.
 ///
-/// When the loop exits normally (stop flag set), calls
-/// `std::process::exit(`[`crate::exit::INTERRUPTED`]`)`.
-pub fn tail_loop(args: &TailArgs, stop: Arc<AtomicBool>) -> anyhow::Result<()> {
+/// When the loop exits normally (stop flag set), returns
+/// `Ok(`[`crate::exit::INTERRUPTED`]`)`.
+pub fn tail_loop(args: &TailArgs, stop: Arc<AtomicBool>) -> anyhow::Result<i32> {
     let today_str = Utc::now().format("%Y-%m-%d").to_string();
     let path = log_file_path(&today_str);
 
@@ -123,7 +123,7 @@ pub fn tail_loop(args: &TailArgs, stop: Arc<AtomicBool>) -> anyhow::Result<()> {
         }
     }
 
-    std::process::exit(crate::exit::INTERRUPTED);
+    Ok(crate::exit::INTERRUPTED)
 }
 
 // ---------------------------------------------------------------------------
@@ -187,7 +187,6 @@ fn print_envelope_line(line: &str, filter: Option<&str>) {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -196,26 +195,11 @@ mod tests {
     use super::*;
 
     // -----------------------------------------------------------------------
-    // Helper: override HOME to a temp dir so path functions resolve there.
-    // -----------------------------------------------------------------------
-
-    fn with_home<F: FnOnce(&TempDir)>(f: F) {
-        let tmp = TempDir::new().expect("tempdir");
-        let original = env::var_os("HOME");
-        unsafe { env::set_var("HOME", tmp.path()) };
-        f(&tmp);
-        match original {
-            Some(v) => unsafe { env::set_var("HOME", v) },
-            None => unsafe { env::remove_var("HOME") },
-        }
-    }
-
-    // -----------------------------------------------------------------------
     // test: stop flag set to true before loop → exits immediately
     // -----------------------------------------------------------------------
 
-    /// Verifies that `tail_loop` calls `process::exit(130)` immediately when
-    /// the stop flag is pre-set.  We can't catch `process::exit` in a normal
+    /// Verifies that `tail_loop` returns `Ok(INTERRUPTED)` immediately when
+    /// the stop flag is pre-set.  We can't easily drive the full loop in a
     /// test; instead we factor that assertion into a standalone unit-level
     /// check of the flag logic.
     #[test]
@@ -236,7 +220,8 @@ mod tests {
 
     #[test]
     fn tail_handles_no_file() {
-        with_home(|_tmp| {
+        let tmp = TempDir::new().expect("tempdir");
+        crate::test_utils::with_fake_home(tmp.path(), || {
             let today_str = Utc::now().format("%Y-%m-%d").to_string();
             let path = log_file_path(&today_str);
             // File must not exist for this test.
