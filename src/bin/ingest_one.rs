@@ -28,11 +28,11 @@ fn main() -> anyhow::Result<()> {
     // because parity runs are ephemeral and must not touch the production DB.
     let conn = hooked::parity::open_db(db_path)?;
 
-    // Drop the shared read-only connection; ingest_file needs &mut Connection.
+    // Drop the schema-init connection; ingest_file needs &mut Connection.
     drop(conn);
 
-    let mut conn = rusqlite::Connection::open(db_path)
-        .map_err(|e| anyhow::anyhow!("failed to re-open {}: {e}", db_path.display()))?;
+    // Re-open with WAL + busy_timeout PRAGMAs applied via the central opener.
+    let mut conn = hooked::dbh::open_with_pragmas(db_path)?;
 
     let stats = hooked::ingest::ingest_file(&mut conn, fixture_path)?;
     eprintln!("ingest_one: {:?}", stats);

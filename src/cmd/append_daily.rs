@@ -150,18 +150,7 @@ fn query_today_stats(today_str: &str) -> anyhow::Result<(i64, i64, i64, i64, i64
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use tempfile::tempdir;
-
-    fn with_home<F: FnOnce()>(fake_home: &str, f: F) {
-        let original = env::var_os("HOME");
-        unsafe { env::set_var("HOME", fake_home) };
-        f();
-        match original {
-            Some(v) => unsafe { env::set_var("HOME", v) },
-            None => unsafe { env::remove_var("HOME") },
-        }
-    }
 
     #[test]
     fn build_content_format_matches_python() {
@@ -179,7 +168,7 @@ mod tests {
     #[test]
     fn append_daily_creates_new_file_when_missing() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path(), || {
             // Use the tempdir as the vault root.
             let vault = tmp.path().join("vault");
             let args = AppendDailyArgs {
@@ -208,7 +197,7 @@ mod tests {
     #[test]
     fn append_daily_appends_to_existing_file() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path(), || {
             let vault = tmp.path().join("vault");
             let today_str = Local::now().format("%Y-%m-%d").to_string();
             let daily_dir = vault.join("Journal").join("Daily notes");
@@ -247,7 +236,7 @@ mod tests {
     #[test]
     fn resolve_vault_uses_default_when_none() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path(), || {
             let args = AppendDailyArgs { vault: None };
             let vault = resolve_vault(&args);
             assert!(vault.starts_with(tmp.path()));

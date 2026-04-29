@@ -1,11 +1,13 @@
 //! Schema DDL v4 and database initialisation.
 //!
 //! The DDL constant [`SCHEMA_V4_DDL`] is ported verbatim from the Python
-//! `DDL` constant in `~/.claude/telemetry/ingest.py`.  Whitespace and
-//! comments inside the SQL are preserved character-for-character.  The test
+//! `DDL` constant in `~/.claude/telemetry/ingest.py`, minus the leading
+//! PRAGMA lines (which are now applied at connection time via
+//! [`crate::dbh::open_with_pragmas`]).  Whitespace and comments inside the
+//! SQL are preserved character-for-character.  The test
 //! `rust_ddl_matches_python_ddl_source` reads `ingest.py` at test-time and
-//! asserts byte-for-byte equality between the extracted Python `DDL` string
-//! and [`SCHEMA_V4_DDL`].
+//! asserts structural equality after stripping PRAGMA lines from both sides
+//! (T04 reconciliation option b — `ingest.py` is left untouched).
 //!
 //! # Marker file
 //!
@@ -14,7 +16,6 @@
 //! on startup.  This module mirrors that behaviour exactly.
 
 use std::fs;
-use std::path::Path;
 
 use anyhow::Context;
 use rusqlite::Connection;
@@ -32,10 +33,10 @@ use crate::paths::{SCHEMA_VERSION, schema_marker};
 /// byte-for-byte identical to the Python source so that SQLite stores
 /// exactly the same `sql` text in `sqlite_schema`, preserving schema-hash
 /// parity between the Python and Rust implementations.
+///
+/// PRAGMAs intentionally not in DDL — applied at connection time via
+/// `dbh::open_with_pragmas`.
 pub const SCHEMA_V4_DDL: &str = "
-PRAGMA journal_mode=WAL;
-PRAGMA busy_timeout=5000;
-
 CREATE TABLE IF NOT EXISTS events (
     id                       INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id               TEXT NOT NULL,
@@ -208,12 +209,14 @@ const REQUIRED_TABLES: &[&str] = &[
 // Database initialisation
 // ---------------------------------------------------------------------------
 
-/// Initialize a fresh v4 schema at the given path.  Creates the file if
-/// missing.  Writes the `.schema_v4` marker next to it on success.
+/// Initialize the v4 schema on the given (already PRAGMA'd) connection.
+///
+/// The caller is responsible for opening the connection via
+/// [`crate::dbh::open_with_pragmas`] before calling this function.  This
+/// avoids the `schema → dbh → schema` import cycle and the redundant
+/// double-open that the old path-based signature required.
 ///
 /// Mirrors Python `_init_db` in `ingest.py`:
-/// - Always sets `PRAGMA journal_mode=WAL` and `PRAGMA busy_timeout=5000`
-///   on every connection open (not just on first init).
 /// - Runs the DDL only when the marker is absent or its content (stripped)
 ///   does not equal `"v4"`.
 /// - Writes `"v4"` (no trailing newline, matching Python's `write_text`)
@@ -231,7 +234,7 @@ const REQUIRED_TABLES: &[&str] = &[
 ///    → return `Err` with an actionable message naming the missing tables and
 ///      the marker path so the operator knows what to inspect and how to
 ///      recover.
-pub fn init_db(db_path: &Path) -> anyhow::Result<()> {
+pub fn init_db(conn: &Connection) -> anyhow::Result<()> {
     assert!(
         !REQUIRED_TABLES.is_empty(),
         "REQUIRED_TABLES must not be empty"
@@ -245,13 +248,6 @@ pub fn init_db(db_path: &Path) -> anyhow::Result<()> {
             .unwrap_or_default()
             .trim()
             .eq(SCHEMA_VERSION);
-
-    let conn = Connection::open(db_path)
-        .with_context(|| format!("failed to open database at {}", db_path.display()))?;
-
-    // Always applied on every open — mirrors Python lines 721-722.
-    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")
-        .context("failed to set WAL/busy_timeout pragmas")?;
 
     if !marker_matches {
         // Case 1: marker absent or stale — run DDL and write marker.
@@ -289,14 +285,16 @@ pub fn init_db(db_path: &Path) -> anyhow::Result<()> {
 
         if !missing.is_empty() {
             // Case 3: marker claims schema is ready, but DB is incomplete.
+            let db_display = conn.path().unwrap_or("<unknown>");
             let missing_list = missing.join(", ");
             anyhow::bail!(
-                "schema marker at '{}' claims version '{}' but the database is \
+                "schema marker at '{}' claims version '{}' but the database '{}' is \
                  missing required tables: {missing_list}. \
                  Either delete the schema marker at '{}' to force re-init, \
                  or run `hooked rebuild` to drop and recreate the database.",
                 marker.display(),
                 SCHEMA_VERSION,
+                db_display,
                 marker.display(),
             );
         }
@@ -316,16 +314,9 @@ pub fn init_db(db_path: &Path) -> anyhow::Result<()> {
 /// stale.  Intended for use at CLI startup (mirrors the check in Python's
 /// `_init_db` gate).
 pub fn ensure_schema_marker() -> anyhow::Result<()> {
-    let marker = schema_marker();
-    if !marker.exists()
-        || fs::read_to_string(&marker)
-            .unwrap_or_default()
-            .trim()
-            .ne(SCHEMA_VERSION)
-    {
-        init_db(&crate::paths::db_path())?;
-    }
-    Ok(())
+    let path = crate::paths::db_path();
+    let conn = crate::dbh::open_with_pragmas(&path)?;
+    init_db(&conn)
 }
 
 /// Read the content of the `.schema_v4` marker file.
@@ -348,6 +339,8 @@ pub fn read_schema_marker() -> anyhow::Result<Option<String>> {
 
 #[cfg(test)]
 mod tests {
+    use rusqlite::Connection;
+
     use super::*;
 
     // -----------------------------------------------------------------------
@@ -364,15 +357,43 @@ mod tests {
     // DDL text-parity test
     // -----------------------------------------------------------------------
 
-    /// Assert that `SCHEMA_V4_DDL` is byte-for-byte identical to the `DDL`
-    /// string extracted from `~/.claude/telemetry/ingest.py`.
+    /// Assert that `SCHEMA_V4_DDL` is structurally identical to the `DDL`
+    /// string extracted from `~/.claude/telemetry/ingest.py`, after stripping
+    /// PRAGMA lines from both sides (T04 reconciliation option b).
+    ///
+    /// The Python source still contains leading PRAGMA lines; the Rust constant
+    /// no longer does (PRAGMAs are applied at connection time via
+    /// `dbh::open_with_pragmas`).  We canonicalize both before comparing so
+    /// the test stays green without modifying the Python source.
     ///
     /// If `ingest.py` is not present (e.g. CI without the dev env), the test
     /// is silently skipped.  If the file is present but the DDL diverges, the
     /// test fails with a diagnostic showing the first differing byte and a
-    /// ±40-byte window from both sides.
+    /// ±40-byte window from both sides of the canonicalized strings.
     #[test]
     fn rust_ddl_matches_python_ddl_source() {
+        /// Canonicalize a DDL string for comparison: strip lines that begin
+        /// with `PRAGMA ` (case-insensitive, after leading whitespace) and trim
+        /// leading/trailing whitespace from the result.
+        ///
+        /// Internal blank lines between CREATE blocks are preserved so the test
+        /// remains sensitive to real structural drift.  Only cosmetic leading-
+        /// and trailing-whitespace differences (e.g. a blank line left between
+        /// the last PRAGMA and the first CREATE) are ignored.
+        ///
+        /// This is the T04 reconciliation "option b" canonicalization: keep
+        /// `ingest.py` untouched, normalize the comparison instead.
+        fn canonicalize_ddl(ddl: &str) -> String {
+            ddl.lines()
+                .filter(|line| {
+                    !line.trim_start().to_ascii_uppercase().starts_with("PRAGMA ")
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+                .trim()
+                .to_owned()
+        }
+
         let py_path = dirs_home().join(".claude/telemetry/ingest.py");
         if !py_path.exists() {
             eprintln!("skipping: {} not present", py_path.display());
@@ -395,22 +416,34 @@ mod tests {
 
         let py_ddl = &py_src[after_open..end];
 
-        if py_ddl != SCHEMA_V4_DDL {
-            let first_diff = py_ddl
+        // Canonicalize both sides: strip PRAGMA lines and trim outer
+        // whitespace (T04 reconciliation option b).
+        let py_canon = canonicalize_ddl(py_ddl);
+        let rs_canon = canonicalize_ddl(SCHEMA_V4_DDL);
+
+        if py_canon != rs_canon {
+            // Diagnostic: show the first differing byte and a ±40-byte window
+            // from both canonicalized strings.  Note that byte positions refer
+            // to the PRAGMA-stripped DDL, not the raw Python source.
+            let first_diff = py_canon
                 .as_bytes()
                 .iter()
-                .zip(SCHEMA_V4_DDL.as_bytes().iter())
+                .zip(rs_canon.as_bytes().iter())
                 .position(|(a, b)| a != b)
-                .unwrap_or_else(|| py_ddl.len().min(SCHEMA_V4_DDL.len()));
+                .unwrap_or_else(|| py_canon.len().min(rs_canon.len()));
             let lo = first_diff.saturating_sub(40);
-            let hi_py = (first_diff + 40).min(py_ddl.len());
-            let hi_rs = (first_diff + 40).min(SCHEMA_V4_DDL.len());
+            let hi_py = (first_diff + 40).min(py_canon.len());
+            let hi_rs = (first_diff + 40).min(rs_canon.len());
             panic!(
-                "DDL divergence at byte {first_diff}\nPython: {:?}\nRust:   {:?}\n(py.len={}, rs.len={})",
-                &py_ddl[lo..hi_py],
-                &SCHEMA_V4_DDL[lo..hi_rs],
-                py_ddl.len(),
-                SCHEMA_V4_DDL.len(),
+                "DDL divergence at byte {first_diff} \
+                 (comparison performed on canonicalized DDL — PRAGMA lines stripped and outer whitespace trimmed; T04 reconciliation option b)\n\
+                 Python: {:?}\n\
+                 Rust:   {:?}\n\
+                 (py_canon.len={}, rs_canon.len={})",
+                &py_canon[lo..hi_py],
+                &rs_canon[lo..hi_rs],
+                py_canon.len(),
+                rs_canon.len(),
             );
         }
     }
@@ -511,11 +544,11 @@ mod tests {
             // Create an empty SQLite file — no DDL applied, so no tables exist.
             let db_dir = tempfile::tempdir().expect("failed to create tempdir for db");
             let db_path = db_dir.path().join("empty.db");
-            // Opening (and immediately closing) the file creates an empty SQLite DB.
-            Connection::open(&db_path).expect("failed to open empty DB");
+            // Open a connection (this creates an empty SQLite DB with no tables).
+            let conn = Connection::open(&db_path).expect("failed to open empty DB");
 
             // init_db must return Err because the marker is present but tables are missing.
-            let result = init_db(&db_path);
+            let result = init_db(&conn);
             assert!(
                 result.is_err(),
                 "expected init_db to return Err when marker is present but tables are missing"

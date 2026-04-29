@@ -213,7 +213,6 @@ fn hash_file(path: &Path, hasher: &mut Sha256) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use std::process::Command;
 
     // -----------------------------------------------------------------------
@@ -426,21 +425,15 @@ mod tests {
     #[test]
     fn config_hash_missing_files() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let original = env::var_os("HOME");
-        // SAFETY: single-threaded test context.
-        unsafe {
-            env::set_var("HOME", dir.path());
-        }
+        let mut result = None;
 
-        let result = config_hash();
+        crate::test_utils::with_fake_home(dir.path(), || {
+            result = Some(config_hash());
+        });
 
-        // Restore HOME before any assertion.
-        match original {
-            Some(v) => unsafe { env::set_var("HOME", v) },
-            None => unsafe { env::remove_var("HOME") },
-        }
-
-        let h = result.expect("config_hash should not error even when all files are missing");
+        let h = result
+            .unwrap()
+            .expect("config_hash should not error even when all files are missing");
         // All files missing → hasher digests nothing → SHA-256 of empty input.
         assert_eq!(
             h, "e3b0c442",
@@ -480,19 +473,13 @@ mod tests {
             .expect("write settings.json");
         std::fs::write(claude_dir.join("CLAUDE.md"), claude_md_content).expect("write CLAUDE.md");
 
-        let original = env::var_os("HOME");
-        unsafe {
-            env::set_var("HOME", dir.path());
-        }
+        let mut result = None;
 
-        let result = config_hash();
+        crate::test_utils::with_fake_home(dir.path(), || {
+            result = Some(config_hash());
+        });
 
-        match original {
-            Some(v) => unsafe { env::set_var("HOME", v) },
-            None => unsafe { env::remove_var("HOME") },
-        }
-
-        let h = result.expect("config_hash should succeed");
+        let h = result.unwrap().expect("config_hash should succeed");
 
         // Compute the expected hash: sort paths as strings, concat bytes, SHA-256[:8].
         // settings.json sorts before CLAUDE.md because 's' > 'C' in ASCII,

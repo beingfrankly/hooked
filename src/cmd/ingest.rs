@@ -78,20 +78,10 @@ mod tests {
     use crate::cli::IngestArgs;
     use tempfile::tempdir;
 
-    fn with_home<F: FnOnce()>(fake_home: &str, f: F) {
-        let original = std::env::var_os("HOME");
-        unsafe { std::env::set_var("HOME", fake_home) };
-        f();
-        match original {
-            Some(v) => unsafe { std::env::set_var("HOME", v) },
-            None => unsafe { std::env::remove_var("HOME") },
-        }
-    }
-
     #[test]
     fn ingest_no_files_runs_without_error() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path(), || {
             let args = IngestArgs {
                 files: vec![],
                 include_today: false,
@@ -109,7 +99,7 @@ mod tests {
     #[test]
     fn ingest_nonexistent_file_reports_error_but_continues() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path(), || {
             let args = IngestArgs {
                 files: vec!["/nonexistent/path/file.jsonl".to_string()],
                 include_today: false,
@@ -123,7 +113,7 @@ mod tests {
     #[test]
     fn ingest_include_today_no_file_runs_cleanly() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path(), || {
             let args = IngestArgs {
                 files: vec![],
                 include_today: true,

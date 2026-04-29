@@ -220,23 +220,12 @@ pub fn health(args: &HealthArgs, fmt: &OutputFormat) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use tempfile::tempdir;
-
-    fn with_home<F: FnOnce()>(fake_home: &str, f: F) {
-        let original = env::var_os("HOME");
-        unsafe { env::set_var("HOME", fake_home) };
-        f();
-        match original {
-            Some(v) => unsafe { env::set_var("HOME", v) },
-            None => unsafe { env::remove_var("HOME") },
-        }
-    }
 
     #[test]
     fn health_runs_with_empty_tempdir() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path(), || {
             let args = HealthArgs { chain_stats: false };
             let result = health(&args, &OutputFormat::Table);
             assert!(result.is_ok(), "health should succeed: {:?}", result);
@@ -246,7 +235,7 @@ mod tests {
     #[test]
     fn health_reports_db_not_found_before_any_data() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path(), || {
             // No DB has been initialised yet.
             let db = db_path();
             assert!(!db.exists(), "DB should not exist in fresh tempdir");
@@ -264,7 +253,7 @@ mod tests {
     #[test]
     fn health_with_chain_stats_flag() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path(), || {
             let args = HealthArgs { chain_stats: true };
             let result = health(&args, &OutputFormat::Table);
             assert!(
@@ -278,7 +267,7 @@ mod tests {
     #[test]
     fn health_json_format_produces_valid_json() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path(), || {
             let args = HealthArgs { chain_stats: false };
             // Just ensure the function completes without error with JSON format.
             let result = health(&args, &OutputFormat::Json);
@@ -293,7 +282,7 @@ mod tests {
     #[test]
     fn health_last_ingest_never_when_missing() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path(), || {
             // .last_ingest doesn't exist → last_ingest should be "never".
             let li = last_ingest_file();
             assert!(!li.exists());
@@ -313,7 +302,7 @@ mod tests {
     #[test]
     fn health_archived_files_zero_when_dir_absent() {
         let tmp = tempdir().expect("tempdir");
-        with_home(tmp.path().to_str().unwrap(), || {
+        crate::test_utils::with_fake_home(tmp.path(), || {
             let arc = archive_dir();
             assert!(!arc.exists());
             let count = if arc.exists() {

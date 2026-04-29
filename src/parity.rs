@@ -1065,10 +1065,12 @@ fn row_preview(row: &HashMap<String, Option<String>>) -> String {
 
 /// Open (or create) a database and apply the v4 DDL.
 ///
-/// Convenience wrapper around [`crate::schema::SCHEMA_V4_DDL`].
+/// Convenience wrapper for parity runs — deliberately bypasses the schema
+/// marker (parity runs are ephemeral and must not touch the production DB).
+/// WAL + busy_timeout PRAGMAs are applied via the central
+/// [`crate::dbh::open_with_pragmas`] before the DDL is executed.
 pub fn open_db(path: &Path) -> anyhow::Result<Connection> {
-    let conn = Connection::open(path)
-        .with_context(|| format!("open_db: cannot open {}", path.display()))?;
+    let conn = crate::dbh::open_with_pragmas(path)?;
     conn.execute_batch(crate::schema::SCHEMA_V4_DDL)
         .context("open_db: DDL failed")?;
     Ok(conn)

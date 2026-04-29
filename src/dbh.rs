@@ -124,7 +124,6 @@ use rusqlite::Connection;
 use crate::envelope::{Envelope, parse_jsonl_file};
 use crate::ingest::{IngestAllStats, ingest_all_unprocessed};
 use crate::paths::{db_path, last_ingest_file, log_dir};
-use crate::schema::init_db;
 use crate::{info, warn_};
 
 // ---------------------------------------------------------------------------
@@ -139,8 +138,27 @@ use crate::{info, warn_};
 pub const DEFAULT_AUTO_INGEST_THRESHOLD: Duration = Duration::from_secs(60);
 
 // ---------------------------------------------------------------------------
-// open_db / open_db_at
+// open_with_pragmas / open_db / open_db_at
 // ---------------------------------------------------------------------------
+
+/// Open a file-backed SQLite connection and apply the WAL + busy_timeout
+/// PRAGMAs that every production code path needs.
+///
+/// This is the single authoritative place those PRAGMAs are applied.
+/// Any other code that opens a SQLite connection should call this
+/// function, except for read-only diff opens (e.g., `parity::diff_databases`)
+/// which deliberately do not need WAL.
+///
+/// Do NOT call this for in-memory connections (`Connection::open_in_memory()`):
+/// WAL is meaningless for in-memory DBs (SQLite forces journal_mode=MEMORY),
+/// and `open_with_pragmas` takes a `&Path` anyway.
+pub fn open_with_pragmas(path: &Path) -> anyhow::Result<Connection> {
+    let conn = Connection::open(path)
+        .with_context(|| format!("failed to open database at {}", path.display()))?;
+    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")
+        .context("failed to set WAL/busy_timeout PRAGMAs")?;
+    Ok(conn)
+}
 
 /// Open the user's sessions DB at [`crate::paths::db_path()`] with WAL and
 /// `busy_timeout` pragmas.  Initialises the schema (idempotent) if the marker
@@ -158,12 +176,10 @@ pub fn open_db() -> anyhow::Result<Connection> {
 ///
 /// ## Steps (mirrors Python `_open_db`)
 /// 1. Ensure the parent directory exists.
-/// 2. Call [`init_db`] — runs the DDL only when the schema marker is absent or
-///    stale; always sets WAL + `busy_timeout` on the connection it opens
-///    internally.
-/// 3. Open a second [`Connection`] to the same path (the one we return to the
-///    caller) and apply the same pragmas so they are guaranteed on the caller's
-///    handle regardless of the `init_db` marker state.
+/// 2. Open the connection via [`open_with_pragmas`].
+/// 3. Call [`init_db`] on that connection — runs the DDL only when the schema
+///    marker is absent or stale.
+/// 4. Return the connection (single open, no redundant second open).
 pub fn open_db_at(path: &Path) -> anyhow::Result<Connection> {
     // Mirror Python: `DB_PATH.parent.mkdir(parents=True, exist_ok=True)`
     if let Some(parent) = path.parent() {
@@ -171,17 +187,8 @@ pub fn open_db_at(path: &Path) -> anyhow::Result<Connection> {
             .with_context(|| format!("failed to create directory {}", parent.display()))?;
     }
 
-    // Initialise schema if needed (idempotent).
-    init_db(path)?;
-
-    // Open the caller's connection.
-    let conn = Connection::open(path)
-        .with_context(|| format!("failed to open database at {}", path.display()))?;
-
-    // Always apply pragmas on every open — mirrors Python lines 196-198.
-    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")
-        .context("failed to set WAL/busy_timeout pragmas")?;
-
+    let conn = open_with_pragmas(path)?;
+    crate::schema::init_db(&conn)?;
     Ok(conn)
 }
 

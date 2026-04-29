@@ -53,7 +53,6 @@ use crate::ingest::writes::{
     SessionRow, ToolCallRow, insert_event, recompute_counters, upsert_session, upsert_tool_call,
 };
 use crate::paths::{db_path, last_ingest_file, log_dir};
-use crate::schema::init_db;
 use crate::{info, warn_};
 
 // ---------------------------------------------------------------------------
@@ -792,19 +791,10 @@ pub fn ingest_all_unprocessed() -> anyhow::Result<IngestAllStats> {
         }
     };
 
-    // 2. Open DB and initialise schema
+    // 2. Open DB and initialise schema (single open via open_db_at).
     let db = db_path();
-    if let Some(parent) = db.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("create telemetry dir {:?}", parent))?;
-    }
-    init_db(&db)?;
-
-    let mut conn = Connection::open(&db).with_context(|| format!("open database {:?}", db))?;
-
-    // Always set WAL + busy_timeout on the connection.
-    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")
-        .context("set WAL/busy_timeout pragmas")?;
+    let mut conn = crate::dbh::open_db_at(&db)
+        .with_context(|| format!("open database {:?}", db))?;
 
     // 3. Determine today's date string (UTC) — files with this date are skipped.
     let today_str = chrono::Utc::now().format("%Y-%m-%d").to_string();
@@ -931,23 +921,6 @@ mod tests {
         let conn = Connection::open_in_memory().expect("open in-memory DB");
         conn.execute_batch(SCHEMA_V4_DDL).expect("apply DDL");
         conn
-    }
-
-    /// Set `HOME` to a tempdir and return it.  Must run in `--test-threads=1`.
-    fn setup_home() -> TempDir {
-        let tmp = TempDir::new().expect("tempdir");
-        unsafe {
-            std::env::set_var("HOME", tmp.path());
-        }
-        tmp
-    }
-
-    /// Restore `HOME` (called after each HOME-mutating test).
-    fn restore_home(original: Option<std::ffi::OsString>) {
-        match original {
-            Some(v) => unsafe { std::env::set_var("HOME", v) },
-            None => unsafe { std::env::remove_var("HOME") },
-        }
     }
 
     /// Build a minimal JSONL line for a given session/event/timestamp.
@@ -1107,20 +1080,21 @@ mod tests {
     /// gracefully with 0 files processed.
     #[test]
     fn ingest_all_unprocessed_with_lock_held() {
-        let original_home = std::env::var_os("HOME");
-        let tmp = setup_home();
+        let tmp = TempDir::new().expect("tempdir");
+        let mut result = None;
 
-        // Acquire the lock before calling ingest_all_unprocessed.
-        let _lock = IngestLock::try_acquire()
-            .expect("acquire")
-            .expect("should succeed on first");
+        crate::test_utils::with_fake_home(tmp.path(), || {
+            // Acquire the lock before calling ingest_all_unprocessed.
+            let _lock = IngestLock::try_acquire()
+                .expect("acquire")
+                .expect("should succeed on first");
 
-        let result = ingest_all_unprocessed();
+            result = Some(ingest_all_unprocessed());
+        });
 
-        restore_home(original_home);
-        drop(tmp);
-
-        let stats = result.expect("ingest_all_unprocessed must not error when lock is held");
+        let stats = result
+            .unwrap()
+            .expect("ingest_all_unprocessed must not error when lock is held");
         assert_eq!(
             stats.files_processed, 0,
             "must process 0 files when lock is already held"
@@ -1134,22 +1108,21 @@ mod tests {
     /// Before call → marker missing; after call → marker has a current timestamp.
     #[test]
     fn last_ingest_marker_updated() {
-        let original_home = std::env::var_os("HOME");
-        let tmp = setup_home();
+        let tmp = TempDir::new().expect("tempdir");
+        let mut exists_after = false;
 
-        // Ensure the last_ingest file does not exist before the call.
-        let marker = crate::paths::last_ingest_file();
-        assert!(
-            !marker.exists(),
-            "last_ingest marker must not exist before ingest run"
-        );
+        crate::test_utils::with_fake_home(tmp.path(), || {
+            // Ensure the last_ingest file does not exist before the call.
+            let marker = crate::paths::last_ingest_file();
+            assert!(
+                !marker.exists(),
+                "last_ingest marker must not exist before ingest run"
+            );
 
-        let _ = ingest_all_unprocessed();
+            let _ = ingest_all_unprocessed();
 
-        let exists_after = marker.exists();
-
-        restore_home(original_home);
-        drop(tmp);
+            exists_after = marker.exists();
+        });
 
         assert!(
             exists_after,

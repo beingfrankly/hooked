@@ -26,13 +26,11 @@ use std::path::PathBuf;
 
 use anyhow::Context as _;
 use flate2::read::GzDecoder;
-use rusqlite::Connection;
 
 use crate::cli::RebuildArgs;
 use crate::ingest::archive::IngestLock;
 use crate::ingest::ingest_file;
 use crate::paths;
-use crate::schema::init_db;
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -72,17 +70,8 @@ pub fn rebuild(args: &RebuildArgs) -> anyhow::Result<()> {
             .with_context(|| format!("remove schema marker {:?}", marker))?;
     }
 
-    // 4. Re-init schema (creates fresh DB + marker).
-    if let Some(parent) = db.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("create telemetry dir {:?}", parent))?;
-    }
-    init_db(&db).context("init_db after drop")?;
-
-    // 5. Open a single connection for the whole rebuild run.
-    let mut conn = Connection::open(&db).with_context(|| format!("open database {:?}", db))?;
-    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")
-        .context("set WAL/busy_timeout pragmas")?;
+    // 4. Re-init schema and open a single connection for the whole rebuild run.
+    let mut conn = crate::dbh::open_db_at(&db).context("open_db_at after drop")?;
 
     // 6. TempDir guard — all decompressed gz files live here until function exit.
     let tmp = tempfile::TempDir::new().context("create tempdir")?;
@@ -187,6 +176,7 @@ mod tests {
     use std::io::Write as _;
 
     use flate2::write::GzEncoder;
+    use rusqlite::Connection;
     use tempfile::tempdir;
 
     use super::*;
