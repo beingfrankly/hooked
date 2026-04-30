@@ -27,7 +27,7 @@
 //!         ev["task_id"] = p.get("task_id")
 //!         ev["task_subject"] = p.get("task_subject")
 //!         ev["teammate_name"] = p.get("teammate_name")
-//!     if ev.get("skill_name") is None:
+//!     if ev.get("skill_name") is None:  # IMPLEMENTED IN T08 — see enrich_session Pass 1
 //!         sname, stype = _detect_skill(ev.get("tool_input"))
 //!         if sname:
 //!             ev["skill_name"] = sname
@@ -222,48 +222,98 @@ pub fn enrich_session(envelopes: Vec<Envelope>) -> Vec<EnrichedEvent> {
         let et = p_str(envelope, "hook_event_name");
         let payload = &envelope.p;
 
-        // Field isolation
-        let iso = &mut events[i].isolation;
+        // Field isolation — scoped so the `iso` mutable borrow is released
+        // before the skill-detection block accesses `events[i].envelope.p`.
+        {
+            let iso = &mut events[i].isolation;
 
-        iso.source = if et == Some("SessionStart") {
-            p_opt_str(payload, "source")
-        } else {
-            None
-        };
-
-        iso.reason = if et == Some("SessionEnd") {
-            p_opt_str(payload, "reason")
-        } else {
-            None
-        };
-
-        iso.compact_trigger = if et == Some("PreCompact") {
-            p_opt_str(payload, "trigger")
-        } else {
-            None
-        };
-
-        iso.config_source = if et == Some("ConfigChange") {
-            p_opt_str(payload, "source")
-        } else {
-            None
-        };
-
-        // is_slash_command
-        if et == Some("UserPromptSubmit") {
-            let pt = p_str(envelope, "prompt").or_else(|| p_str(envelope, "prompt_text"));
-            iso.is_slash_command = if pt.map(|s| s.starts_with('/')).unwrap_or(false) {
-                1
+            iso.source = if et == Some("SessionStart") {
+                p_opt_str(payload, "source")
             } else {
-                0
+                None
             };
+
+            iso.reason = if et == Some("SessionEnd") {
+                p_opt_str(payload, "reason")
+            } else {
+                None
+            };
+
+            iso.compact_trigger = if et == Some("PreCompact") {
+                p_opt_str(payload, "trigger")
+            } else {
+                None
+            };
+
+            iso.config_source = if et == Some("ConfigChange") {
+                p_opt_str(payload, "source")
+            } else {
+                None
+            };
+
+            // is_slash_command
+            if et == Some("UserPromptSubmit") {
+                let pt = p_str(envelope, "prompt").or_else(|| p_str(envelope, "prompt_text"));
+                iso.is_slash_command = if pt.map(|s| s.starts_with('/')).unwrap_or(false) {
+                    1
+                } else {
+                    0
+                };
+            }
+
+            // TaskCompleted fields
+            if et == Some("TaskCompleted") {
+                iso.task_id = p_opt_str(payload, "task_id");
+                iso.task_subject = p_opt_str(payload, "task_subject");
+                iso.teammate_name = p_opt_str(payload, "teammate_name");
+            }
         }
 
-        // TaskCompleted fields
-        if et == Some("TaskCompleted") {
-            iso.task_id = p_opt_str(payload, "task_id");
-            iso.task_subject = p_opt_str(payload, "task_subject");
-            iso.teammate_name = p_opt_str(payload, "teammate_name");
+        // T08: skill detection — wire `enrich::skill::detect_skill` into the
+        // enrichment pipeline.  Mirrors Python (~/.claude/telemetry/ingest.py
+        // lines 343-348):
+        //
+        //   if ev.get("skill_name") is None:
+        //       sname, stype = _detect_skill(ev.get("tool_input"))
+        //       if sname:
+        //           ev["skill_name"] = sname
+        //           ev["skill_type"] = stype
+        //
+        // Skip detection if a skill_name is already present in the payload
+        // (e.g., a hook injected it upstream).  Convert non-string tool_input
+        // to compact JSON to match Python's json.dumps(..., separators=(",", ":")).
+        {
+            let already_has = events[i]
+                .envelope
+                .p
+                .as_object()
+                .and_then(|m| m.get("skill_name"))
+                .map(|v| !v.is_null())
+                .unwrap_or(false);
+
+            if !already_has {
+                let tool_input_str: String =
+                    match events[i].envelope.p.as_object().and_then(|m| m.get("tool_input")) {
+                        Some(serde_json::Value::String(s)) => s.clone(),
+                        Some(other) => crate::envelope::python_json_compact(other),
+                        None => String::new(),
+                    };
+
+                if let Some(detected) = crate::enrich::skill::detect_skill(&tool_input_str) {
+                    if let serde_json::Value::Object(ref mut map) = events[i].envelope.p {
+                        map.insert(
+                            "skill_name".to_string(),
+                            serde_json::Value::String(detected.name),
+                        );
+                        if let Some(st) = detected.skill_type {
+                            map.insert(
+                                "skill_type".to_string(),
+                                serde_json::Value::String(st),
+                            );
+                        }
+                    }
+                }
+            }
         }
 
         // Track PreToolUse timestamps for Pass 2
@@ -1021,6 +1071,164 @@ mod tests {
         assert_eq!(
             result[0].input_bytes, 14,
             "input_bytes for {{\"x\":\"\\u00e9\"}} must be 14 (all-ASCII after ensure_ascii escaping)"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // skill_detection_string_tool_input
+    // -----------------------------------------------------------------------
+
+    /// When `tool_input` is a JSON string containing a `.claude/skills/` path,
+    /// `enrich_session` must populate `skill_name` and `skill_type` in the
+    /// enriched event's envelope payload.
+    ///
+    /// Mirrors Python ingest.py lines 343-348.
+    #[test]
+    fn skill_detection_string_tool_input() {
+        let ev = Envelope {
+            v: 1,
+            ts: "2024-01-01T00:00:00.000Z".to_owned(),
+            p: json!({
+                "hook_event_name": "PreToolUse",
+                "session_id": "s1",
+                "tool_input": "read_file \".claude/skills/agents/foo-skill.md\"",
+            }),
+            h: None,
+            raw_index: 0,
+            raw_line: String::new(),
+        };
+
+        let result = enrich_session(vec![ev]);
+        assert_eq!(result.len(), 1);
+
+        let p = &result[0].envelope.p;
+        assert_eq!(
+            p.get("skill_name").and_then(serde_json::Value::as_str),
+            Some("foo-skill"),
+            "skill_name must be detected from string tool_input"
+        );
+        assert_eq!(
+            p.get("skill_type").and_then(serde_json::Value::as_str),
+            Some("agent_definition"),
+            "skill_type must be detected from agents/ path"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // skill_detection_object_tool_input
+    // -----------------------------------------------------------------------
+
+    /// When `tool_input` is a JSON object (not a string), `enrich_session` must
+    /// compact-serialize it and then scan for a `.claude/skills/` path.
+    ///
+    /// Mirrors Python: `json.dumps(tool_input_raw, separators=(",", ":"))`.
+    #[test]
+    fn skill_detection_object_tool_input() {
+        let ev = Envelope {
+            v: 1,
+            ts: "2024-01-01T00:00:00.000Z".to_owned(),
+            p: json!({
+                "hook_event_name": "PreToolUse",
+                "session_id": "s1",
+                "tool_input": {
+                    "path": ".claude/skills/system/base-instructions.md",
+                    "action": "read",
+                },
+            }),
+            h: None,
+            raw_index: 0,
+            raw_line: String::new(),
+        };
+
+        let result = enrich_session(vec![ev]);
+        assert_eq!(result.len(), 1);
+
+        let p = &result[0].envelope.p;
+        assert_eq!(
+            p.get("skill_name").and_then(serde_json::Value::as_str),
+            Some("base-instructions"),
+            "skill_name must be detected from compact-serialized object tool_input"
+        );
+        assert_eq!(
+            p.get("skill_type").and_then(serde_json::Value::as_str),
+            Some("system_skill"),
+            "skill_type must be detected from system/ path"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // skill_detection_skipped_when_already_set
+    // -----------------------------------------------------------------------
+
+    /// When `skill_name` is already present in the payload (e.g. injected by a
+    /// hook upstream), `enrich_session` must NOT overwrite it.
+    ///
+    /// Mirrors Python: `if ev.get("skill_name") is None:`.
+    #[test]
+    fn skill_detection_skipped_when_already_set() {
+        let ev = Envelope {
+            v: 1,
+            ts: "2024-01-01T00:00:00.000Z".to_owned(),
+            p: json!({
+                "hook_event_name": "PreToolUse",
+                "session_id": "s1",
+                "tool_input": "read_file \".claude/skills/agents/other-skill.md\"",
+                "skill_name": "upstream-skill",
+                "skill_type": "project_skill",
+            }),
+            h: None,
+            raw_index: 0,
+            raw_line: String::new(),
+        };
+
+        let result = enrich_session(vec![ev]);
+        assert_eq!(result.len(), 1);
+
+        let p = &result[0].envelope.p;
+        assert_eq!(
+            p.get("skill_name").and_then(serde_json::Value::as_str),
+            Some("upstream-skill"),
+            "pre-existing skill_name must not be overwritten"
+        );
+        assert_eq!(
+            p.get("skill_type").and_then(serde_json::Value::as_str),
+            Some("project_skill"),
+            "pre-existing skill_type must not be overwritten"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // skill_detection_no_match_leaves_fields_absent
+    // -----------------------------------------------------------------------
+
+    /// When `tool_input` has no `.claude/skills/` path, neither `skill_name`
+    /// nor `skill_type` should be inserted into the payload.
+    #[test]
+    fn skill_detection_no_match_leaves_fields_absent() {
+        let ev = Envelope {
+            v: 1,
+            ts: "2024-01-01T00:00:00.000Z".to_owned(),
+            p: json!({
+                "hook_event_name": "PreToolUse",
+                "session_id": "s1",
+                "tool_input": "read_file \"/some/other/path.txt\"",
+            }),
+            h: None,
+            raw_index: 0,
+            raw_line: String::new(),
+        };
+
+        let result = enrich_session(vec![ev]);
+        assert_eq!(result.len(), 1);
+
+        let p = &result[0].envelope.p;
+        assert!(
+            p.get("skill_name").is_none(),
+            "skill_name must not be inserted when no skill path is found"
+        );
+        assert!(
+            p.get("skill_type").is_none(),
+            "skill_type must not be inserted when no skill path is found"
         );
     }
 }
