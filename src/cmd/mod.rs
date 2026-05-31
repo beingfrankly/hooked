@@ -126,3 +126,27 @@ pub use rebuild::rebuild;
 pub mod import_legacy;
 
 pub use import_legacy::import_legacy;
+
+// ---------------------------------------------------------------------------
+// Implemented subcommand modules (coverage)
+// ---------------------------------------------------------------------------
+
+pub mod coverage;
+
+pub use coverage::coverage;
+
+// ---------------------------------------------------------------------------
+// Implemented subcommand modules (provenance)
+// ---------------------------------------------------------------------------
+
+pub mod provenance;
+
+pub use provenance::provenance;
+
+// ---------------------------------------------------------------------------
+// Implemented subcommand modules (gate)
+// ---------------------------------------------------------------------------
+
+pub mod gate;
+
+pub use gate::gate;

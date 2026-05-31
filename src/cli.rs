@@ -132,6 +132,12 @@ pub enum Command {
     /// Backfill from existing per-project JSONL logs and old SQLite databases
     #[command(name = "import-legacy")]
     ImportLegacy(ImportLegacyArgs),
+    /// Derive observed file/pattern coverage from telemetry, keyed by agent_id
+    Coverage(CoverageArgs),
+    /// Phase 0 provenance metrics: re-exploration overlap and coverage-edge incidents
+    Provenance(ProvenanceArgs),
+    /// Non-blocking PreToolUse coverage gate (reads stdin, warns worker once per file)
+    Gate(GateArgs),
 }
 
 // ---------------------------------------------------------------------------
@@ -420,6 +426,31 @@ pub struct AppendDailyArgs {
 /// Args for `import-legacy`
 #[derive(Args, Debug)]
 pub struct ImportLegacyArgs {}
+
+/// Args for `coverage`
+#[derive(Args, Debug)]
+pub struct CoverageArgs {
+    /// Agent ID to derive coverage for
+    pub agent_id: String,
+
+    /// Write coverage JSON to ~/.claude/telemetry/coverage/<agent_id>.json
+    #[arg(long)]
+    pub write: bool,
+}
+
+/// Args for `provenance`
+#[derive(Args, Debug)]
+pub struct ProvenanceArgs {
+    /// Number of trailing calendar days of logs to include (default: 7)
+    #[arg(long, default_value_t = 7)]
+    pub days: u32,
+}
+
+/// Args for `gate`
+///
+/// No CLI arguments — the hook payload is read from stdin.
+#[derive(Args, Debug)]
+pub struct GateArgs {}
 
 // ---------------------------------------------------------------------------
 // Tests

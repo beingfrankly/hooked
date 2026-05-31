@@ -59,5 +59,8 @@ pub fn run(cli: cli::Cli) -> anyhow::Result<i32> {
         Sql(a) => { cmd::sql(&a, &fmt)?; Ok(0) }
         AppendDaily(a) => { cmd::append_daily(&a)?; Ok(0) }
         ImportLegacy(a) => { cmd::import_legacy(&a)?; Ok(0) }
+        Coverage(a) => { cmd::coverage(&a, &fmt)?; Ok(0) }
+        Provenance(a) => { cmd::provenance(&a, &fmt)?; Ok(0) }
+        Gate(a) => { cmd::gate(&a, &fmt)?; Ok(0) }
     }
 }
