@@ -1,0 +1,588 @@
+# Claude Hook Guard v1 default policy
+#
+# This file is intended to be production-ready as shipped.
+# Local users may copy and edit it after installation.
+
+[profiles._default]
+tools = ["Skill"]
+mcp-tools = []
+
+[profiles.orchestrator]
+aliases = ["", "orchestrator"]
+tools = [
+  "Agent",
+  "Read",
+  "Search",
+  "AskUserQuestion",
+  "Task",
+  "TaskCreate",
+  "TaskUpdate",
+  "TaskGet",
+  "TaskList",
+  "TaskOutput",
+  "TodoRead",
+  "TodoWrite",
+  "Skill",
+  "Bash",
+]
+mcp-tools = [
+  "mcp__HubSpotDev__fetch-doc",
+  "mcp__HubSpotDev__search-doc",
+  "mcp__atlassian__*",
+  "mcp__mcp-atlassian__*",
+  "mcp__mcp_atlassian__*",
+  "mcp__Atlassian_MCP_Server__*",
+  "mcp__atlassian_mcp_server__*",
+  "mcp__hfs-api__*",
+  "mcp__hfs_api__*",
+]
+commands = { categories = ["bd-read", "bd-write"], structure = { single-command = true, no-redirection = true } }
+agent = { spawn = { allow = [
+  { profile = "search", may-bypass = true },
+  { profile = "ast-search", may-bypass = true },
+  { profile = "lsp-search", may-bypass = true },
+  { profile = "curl", may-bypass = true },
+  { profile = "docs", may-bypass = true },
+  { profile = "worker", may-bypass = false },
+  { profile = "reviewer", may-bypass = true },
+  { profile = "codex-review", may-bypass = true },
+  { profile = "plan", may-bypass = false },
+  { profile = "notes", may-bypass = true },
+  { profile = "build-runner", may-bypass = true },
+  { profile = "git", may-bypass = false },
+  { profile = "docker", may-bypass = false },
+  { profile = "browser", may-bypass = false },
+] } }
+
+[profiles.main]
+aliases = ["main"]
+tools = [
+  "Agent",
+  "Read",
+  "Search",
+  "WebFetch",
+  "AskUserQuestion",
+  "EnterPlanMode",
+  "ExitPlanMode",
+  "Task",
+  "TaskCreate",
+  "TaskUpdate",
+  "TaskGet",
+  "TaskList",
+  "TaskOutput",
+  "TodoRead",
+  "TodoWrite",
+  "Skill",
+]
+mcp-tools = []
+commands = { categories = [] }
+agent = { spawn = { allow = [
+  { profile = "search", may-bypass = true },
+  { profile = "ast-search", may-bypass = true },
+  { profile = "lsp-search", may-bypass = true },
+  { profile = "curl", may-bypass = true },
+  { profile = "docs", may-bypass = true },
+  { profile = "worker", may-bypass = false },
+  { profile = "reviewer", may-bypass = true },
+  { profile = "codex-review", may-bypass = true },
+  { profile = "plan", may-bypass = false },
+  { profile = "git", may-bypass = false },
+  { profile = "notes", may-bypass = true },
+  { profile = "build-runner", may-bypass = true },
+  { profile = "docker", may-bypass = false },
+  { profile = "browser", may-bypass = false },
+] } }
+
+[profiles.search]
+aliases = ["search"]
+tools = ["Read", "Glob", "Grep", "Bash", "Skill"]
+mcp-tools = []
+commands = { categories = ["fs-read-introspection", "fs-search", "cass"], structure = { single-command = true, no-redirection = true } }
+
+[profiles.ast-search]
+aliases = ["ast-search"]
+tools = ["Read", "ast_grep_search", "Skill"]
+mcp-tools = []
+commands = { categories = [] }
+
+[profiles.lsp-search]
+aliases = ["lsp-search"]
+tools = ["lsp_hover", "lsp_goto_definition", "lsp_find_references", "lsp_document_symbols", "lsp_workspace_symbols", "lsp_diagnostics", "lsp_servers"]
+mcp-tools = []
+commands = { categories = [] }
+
+[profiles.docs]
+aliases = ["docs"]
+tools = ["Bash", "Skill"]
+mcp-tools = []
+commands = { categories = ["ctx7", "defuddle"], structure = { single-command = true, no-redirection = true } }
+
+[profiles.curl]
+aliases = ["curl"]
+tools = ["Read", "Bash", "Skill"]
+mcp-tools = []
+commands = { categories = ["curl-hubapi", "jq"], structure = { single-command = true, allow-pipeline = true, no-redirection = true } }
+
+[profiles.worker]
+aliases = ["worker"]
+tools = ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "Skill"]
+mcp-tools = []
+commands = { categories = ["bd-read", "bd-write", "fs-structural", "fs-delete", "git-read", "hs"] }
+
+[profiles.reviewer]
+aliases = ["reviewer"]
+tools = ["Read", "Glob", "Grep", "Skill"]
+mcp-tools = []
+commands = { categories = ["git-read"] }
+
+[profiles.codex-review]
+aliases = ["codex-review"]
+tools = ["Read", "Glob", "Grep", "Bash", "Skill"]
+mcp-tools = []
+commands = { categories = ["git-read", "codex-companion-review"] }
+
+[profiles.plan]
+aliases = ["Plan"]
+tools = ["Read", "Glob", "Grep", "Search", "WebFetch", "Skill"]
+mcp-tools = []
+commands = { categories = [] }
+
+[profiles.git]
+aliases = ["git"]
+tools = ["Read", "Bash", "Skill"]
+mcp-tools = []
+commands = { categories = ["git-read", "git-local-write", "git-rebase", "git-push", "worktrunk"] }
+
+[profiles.notes]
+aliases = ["notes"]
+tools = ["Read", "Bash", "Skill"]
+mcp-tools = []
+commands = { categories = ["obsidian-read", "obsidian-write"], structure = { single-command = true, no-redirection = true } }
+
+[profiles.build-runner]
+aliases = ["build-runner"]
+tools = ["Read", "Glob", "Grep", "Bash", "Skill"]
+mcp-tools = []
+commands = { categories = ["build-runner"] }
+
+[profiles.docker]
+aliases = ["docker"]
+tools = ["Read", "Bash", "Skill"]
+mcp-tools = []
+commands = { categories = ["docker"] }
+
+[profiles.browser]
+aliases = ["browser"]
+tools = ["Read", "Bash", "Skill"]
+mcp-tools = []
+commands = { categories = ["browser"] }
+
+[command-categories.ls]
+allow = [
+  ["ls"],
+]
+
+[command-categories.bd-read]
+allow = [
+  ["bd", "--help"],
+  ["bd", "-h"],
+  ["bd", "help"],
+  ["bd", "prime"],
+  ["bd", "ready"],
+  ["bd", "show"],
+  ["bd", "list"],
+  ["bd", "status"],
+  ["bd", "stats"],
+  ["bd", "search"],
+  ["bd", "blocked"],
+  ["bd", "graph"],
+  ["bd", "count"],
+  ["bd", "children"],
+  ["bd", "history"],
+  ["bd", "types"],
+  ["bd", "statuses"],
+  ["bd", "context"],
+  ["bd", "where"],
+  ["bd", "info"],
+  ["bd", "recall"],
+  ["bd", "state"],
+  ["bd", "quickstart"],
+  ["bd", "human"],
+  ["bd", "version"],
+  ["bd", "preflight"],
+  ["bd", "lint"],
+  ["bd", "stale"],
+  ["bd", "defer"],
+  ["bd", "diff"],
+  ["bd", "memories"],
+  ["bd", "dep", "list"],
+  ["bd", "dep", "tree"],
+  ["bd", "dep", "cycles"],
+]
+
+[command-categories.bd-write]
+allow = [
+  ["bd", "update"],
+  ["bd", "close"],
+  ["bd", "create"],
+  ["bd", "remember"],
+  ["bd", "dep", "add"],
+  ["bd", "dep", "remove"],
+  ["bd", "dep", "relate"],
+  ["bd", "dep", "unrelate"],
+]
+
+[command-categories.git-read]
+allow = [
+  ["git", "status"],
+  ["git", "diff"],
+  ["git", "log"],
+  ["git", "show"],
+  ["git", "rev-parse"],
+  ["git", "branch"],
+  ["git", "remote"],
+  ["git", "tag"],
+  ["git", "blame"],
+  ["git", "fetch"],
+  ["git", "stash", "list"],
+  ["git", "worktree", "list"],
+]
+
+[command-categories.codex-companion-review]
+allow = [
+  ["node", "\"/Users/Frank.vanEldijk/.claude/plugins/marketplaces/openai-codex/plugins/codex/scripts/codex-companion.mjs\"", "review"],
+]
+
+[command-categories.git-local-write]
+allow = [
+  ["git", "add"],
+  ["git", "commit"],
+  ["git", "checkout"],
+  ["git", "merge"],
+  ["git", "switch"],
+  ["git", "stash"],
+  ["git", "worktree", "add"],
+]
+
+[command-categories.git-rebase]
+allow = [
+  ["git", "rebase"],
+]
+
+[command-categories.git-push]
+allow = [
+  ["git", "push"],
+]
+
+[command-categories.worktrunk]
+allow = [
+  ["wt", "--help"],
+  ["wt", "-h"],
+  ["wt", "list"],
+  ["wt", "switch"],
+  ["wt", "remove"],
+  ["wt", "merge"],
+  ["wt", "config"],
+  ["wt", "step"],
+  ["wt", "hook"],
+  ["git-wt", "--help"],
+  ["git-wt", "-h"],
+  ["git-wt", "list"],
+  ["git-wt", "switch"],
+  ["git-wt", "create", "--help"],
+  ["git-wt", "remove"],
+  ["git-wt", "merge"],
+  ["git-wt", "config"],
+  ["git-wt", "step"],
+  ["git-wt", "hook"],
+]
+
+[command-categories.fs-structural]
+allow = [
+  ["mkdir"],
+  ["mv"],
+  ["cp"],
+  ["chmod", "+x"],
+  ["touch"],
+  ["ln"],
+]
+
+[command-categories.fs-delete]
+allow = [
+  ["rm"],
+]
+
+[command-categories.cass]
+allow = [
+  ["cass"],
+]
+
+[command-categories.obsidian-read]
+allow = [
+  ["obsidian", "read"],
+]
+
+[command-categories.obsidian-write]
+allow = [
+  ["obsidian", "create"],
+  ["obsidian", "append"],
+  ["obsidian", "daily:append"],
+  ["obsidian", "property:set"],
+]
+
+[command-categories.build-runner]
+allow = [
+  ["nvim", "--headless", "-l"],
+  ["nvim", "--headless", "-u"],
+  ["cargo"],
+  ["pnpm"],
+  ["pnpm", "build"],
+  ["pnpm", "test"],
+  ["pnpm", "lint"],
+  ["pnpm", "run"],
+  ["npm", "build"],
+  ["npm", "test"],
+  ["npm", "run"],
+  ["mvn", "compile"],
+  ["mvn", "test"],
+  ["mvn", "test-compile"],
+  ["mvn", "install"],
+  ["mvn", "verify"],
+  ["mvn", "package"],
+  ["mvn", "org.pitest:pitest-maven:mutationCoverage"],
+  ["mvn", "pitest:mutationCoverage"],
+  ["mvnw", "compile"],
+  ["mvnw", "test"],
+  ["mvnw", "test-compile"],
+  ["mvnw", "install"],
+  ["mvnw", "verify"],
+  ["mvnw", "package"],
+  ["mvnw", "org.pitest:pitest-maven:mutationCoverage"],
+  ["mvnw", "pitest:mutationCoverage"],
+  ["gradle", "build"],
+  ["gradle", "test"],
+  ["gradle", "check"],
+  ["./gradlew", "build"],
+  ["./gradlew", "test"],
+  ["./gradlew", "check"],
+  ["cargo", "build"],
+  ["cargo", "test"],
+  ["cargo", "check"],
+  ["cargo", "clippy"],
+  ["rustup"],
+  ["go", "build"],
+  ["go", "test"],
+  ["go-hfs", "build"],
+  ["npx", "stryker", "run"],
+  ["npx", "@stryker-mutator/core", "run"],
+  ["npx", "tsc"],
+  ["jest"],
+  ["vitest"],
+]
+
+[command-categories.fs-read-introspection]
+allow = [
+  ["readlink"],
+  ["greadlink"],
+  ["realpath"],
+  ["ls"],
+  ["stat"],
+  ["file"],
+]
+
+[command-categories.fs-search]
+allow = [
+  ["grep"],
+  ["egrep"],
+  ["fgrep"],
+  ["rg"],
+  ["find"],
+  ["fd"],
+]
+
+[command-categories.docker]
+allow = [
+  ["docker", "ps"],
+  ["docker", "logs"],
+  ["docker", "inspect"],
+  ["docker", "images"],
+  ["docker", "build"],
+  ["docker", "restart"],
+  ["docker", "compose", "up"],
+  ["docker", "compose", "down"],
+  ["docker", "compose", "build"],
+  ["docker-compose", "up"],
+  ["docker-compose", "down"],
+  ["docker-compose", "build"],
+]
+
+[command-categories.browser]
+allow = [
+  ["agent-browser"],
+]
+
+[command-categories.ctx7]
+allow = [
+  ["ctx7", "library"],
+  ["ctx7", "docs"],
+]
+
+[command-categories.defuddle]
+allow = [
+  ["defuddle", "parse"],
+]
+
+[command-categories.hs]
+allow = [
+  ["hs"],
+  ["npx", "hs"],
+]
+
+[command-categories.curl-hubapi]
+allow = [
+  ["curl"],
+]
+
+[command-categories.jq]
+allow = [
+  ["jq"],
+]
+
+[safety.rm-no-recursive]
+kind = "deny-flags"
+command = { prefix = ["rm"] }
+flags = ["-r", "-R", "--recursive"]
+message = "BLOCKED: recursive rm is not allowed."
+
+[safety.find-no-exec-or-write-actions]
+kind = "deny-flags"
+command = { prefix = ["find"] }
+flags = ["-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprintf"]
+message = "BLOCKED: find actions that execute commands or write files are not allowed."
+
+[safety.fd-no-exec-actions]
+kind = "deny-flags"
+command = { prefix = ["fd"] }
+flags = ["-x", "--exec", "-X", "--exec-batch"]
+message = "BLOCKED: fd exec actions are not allowed."
+
+[safety.rg-no-preprocessor]
+kind = "deny-flags"
+command = { prefix = ["rg"] }
+flags = ["--pre"]
+message = "BLOCKED: rg preprocessors are not allowed."
+
+[safety.git-add-explicit-files]
+kind = "require-explicit-pathspecs"
+command = { prefix = ["git", "add"] }
+forbid = [".", "-A", "--all"]
+message = "BLOCKED: git add must name explicit file paths."
+
+[safety.git-commit-no-amend]
+kind = "deny-flags"
+command = { prefix = ["git", "commit"] }
+flags = ["--amend"]
+message = "BLOCKED: git commit --amend is not allowed."
+
+[safety.curl-hubapi-domain-only]
+kind = "require-curl-url-prefix"
+command = { prefix = ["curl"] }
+prefixes = ["https://api.hubapi.com"]
+message = "BLOCKED: curl is only allowed against https://api.hubapi.com."
+
+[safety.curl-allowed-methods]
+kind = "allow-curl-methods"
+command = { prefix = ["curl"] }
+prefixes = ["GET", "POST", "PUT", "PATCH"]
+message = "BLOCKED: curl only allows GET, POST, PUT, and PATCH methods for the curl profile."
+
+[safety.curl-allowed-headers]
+kind = "allow-curl-headers"
+command = { prefix = ["curl"] }
+prefixes = ["Authorization: Bearer ", "Content-Type: application/json"]
+message = "BLOCKED: curl only allows Authorization Bearer and Content-Type: application/json headers."
+
+[safety.curl-allowed-import-forms]
+kind = "allow-curl-forms"
+command = { prefix = ["curl"] }
+targets = ["https://api.hubapi.com/crm/v3/imports"]
+prefixes = ["importRequest=</tmp/", "files=@/tmp/"]
+message = "BLOCKED: multipart curl is only allowed for HubSpot imports with /tmp importRequest and files form fields."
+
+[safety.curl-no-unsafe-flags]
+kind = "deny-flags"
+command = { prefix = ["curl"] }
+flags = [
+  "-o",
+  "-O",
+  "--output",
+  "--remote-name",
+  "-T",
+  "--upload-file",
+  "--form-string",
+  "-K",
+  "--config",
+  "-E",
+  "--cert",
+  "--key",
+  "-u",
+  "--user",
+  "-b",
+  "--cookie",
+  "-c",
+  "--cookie-jar",
+  "-x",
+  "--proxy",
+]
+message = "BLOCKED: curl flags that write files, upload data, or inject broader transport/auth state are not allowed."
+
+[safety.git-commit-no-empty]
+kind = "deny-flags"
+command = { prefix = ["git", "commit"] }
+flags = ["--allow-empty"]
+message = "BLOCKED: empty commits are not allowed."
+
+[safety.git-push-no-force]
+kind = "deny-flags"
+command = { prefix = ["git", "push"] }
+flags = ["--force", "-f", "--delete"]
+message = "BLOCKED: force/delete push is not allowed."
+
+[safety.git-push-explicit-branch]
+kind = "require-explicit-push-target"
+command = { prefix = ["git", "push"] }
+message = "BLOCKED: git push requires explicit remote and branch."
+
+[safety.git-push-no-protected]
+kind = "deny-protected-branch"
+command = { prefix = ["git", "push"] }
+branches = ["main", "master", "develop"]
+message = "BLOCKED: push to protected branch is not allowed."
+
+[safety.git-rebase-requires-confirmation]
+kind = "deny-always"
+command = { prefix = ["git", "rebase"] }
+allow-exact = [["git", "rebase", "origin/main"]]
+message = "BLOCKED: git rebase requires explicit user confirmation. Ask the user first."
+
+[safety.docker-logs-bounded]
+kind = "require-bounded-logs"
+command = { prefix = ["docker", "logs"] }
+message = "BLOCKED: docker logs requires --tail or equivalent bound."
+
+[safety.docker-no-exec]
+kind = "deny-always"
+command = { prefix = ["docker", "exec"] }
+message = "BLOCKED: docker exec is not allowed."
+
+[safety.docker-no-destructive]
+kind = "deny-subcommands"
+command = { prefix = ["docker"] }
+subcommands = [
+  ["rm"],
+  ["rmi"],
+  ["system", "prune"],
+  ["volume", "rm"],
+  ["network", "rm"],
+]
+message = "BLOCKED: destructive docker command is not allowed."
