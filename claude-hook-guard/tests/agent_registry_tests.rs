@@ -3,12 +3,8 @@ use std::process::Command;
 
 #[test]
 fn agent_registry_is_consistent() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|p| p.parent())
-        .expect("crate should live under tools/claude-hook-guard")
-        .to_path_buf();
-    let script = root.join("tools/agent-registry/validate.sh");
+    let home = std::env::var("HOME").expect("HOME should be set");
+    let script = PathBuf::from(home).join(".claude/tools/agent-registry/validate.sh");
 
     let output = Command::new("bash")
         .arg(&script)
