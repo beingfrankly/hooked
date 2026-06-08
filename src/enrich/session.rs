@@ -139,6 +139,11 @@ pub struct EnrichedEvent {
     /// The original parsed envelope.
     pub envelope: Envelope,
 
+    /// Typed enrichment-derived fields collected during the enrichment
+    /// pipeline.  These are merged into `envelope.p` at the persistence
+    /// boundary (exactly once) via `EnrichedPayload::merge_into`.
+    pub enriched: crate::enrich::payload::EnrichedPayload,
+
     // Pass 1
     /// 0-based position within the session (sorted by timestamp + raw_index).
     pub sequence_num: i64,
@@ -203,6 +208,7 @@ pub fn enrich_session(envelopes: Vec<Envelope>) -> Vec<EnrichedEvent> {
     for (seq, envelope) in sorted.iter().enumerate() {
         events.push(EnrichedEvent {
             envelope: envelope.clone(),
+            enriched: crate::enrich::payload::EnrichedPayload::default(),
             sequence_num: seq as i64,
             isolation: FieldIsolation::default(),
             duration_ms: None,
@@ -269,8 +275,8 @@ pub fn enrich_session(envelopes: Vec<Envelope>) -> Vec<EnrichedEvent> {
             }
         }
 
-        // T08: skill detection — wire `enrich::skill::detect_skill` into the
-        // enrichment pipeline.  Mirrors Python (~/.claude/telemetry/ingest.py
+        // T08/T09: skill detection — wire `enrich::skill::detect_skill` into
+        // the enrichment pipeline.  Mirrors Python (~/.claude/telemetry/ingest.py
         // lines 343-348):
         //
         //   if ev.get("skill_name") is None:
@@ -279,39 +285,37 @@ pub fn enrich_session(envelopes: Vec<Envelope>) -> Vec<EnrichedEvent> {
         //           ev["skill_name"] = sname
         //           ev["skill_type"] = stype
         //
-        // Skip detection if a skill_name is already present in the payload
-        // (e.g., a hook injected it upstream).  Convert non-string tool_input
-        // to compact JSON to match Python's json.dumps(..., separators=(",", ":")).
+        // T09: writes detected values to `enriched` (typed carrier) rather than
+        // mutating `envelope.p` directly.  The merge into `envelope.p` happens
+        // at the persistence boundary (merge_enriched_into_payloads in ingest).
+        //
+        // Skip detection if a skill_name is already present on the typed carrier
+        // OR in the JSON payload (e.g., a hook injected it upstream).
         {
-            let already_has = events[i]
-                .envelope
-                .p
-                .as_object()
-                .and_then(|m| m.get("skill_name"))
-                .map(|v| !v.is_null())
-                .unwrap_or(false);
+            let already_has = events[i].enriched.skill_name.is_some()
+                || events[i]
+                    .envelope
+                    .p
+                    .as_object()
+                    .and_then(|m| m.get("skill_name"))
+                    .map(|v| !v.is_null())
+                    .unwrap_or(false);
 
             if !already_has {
-                let tool_input_str: String =
-                    match events[i].envelope.p.as_object().and_then(|m| m.get("tool_input")) {
-                        Some(serde_json::Value::String(s)) => s.clone(),
-                        Some(other) => crate::envelope::python_json_compact(other),
-                        None => String::new(),
-                    };
+                let tool_input_str: String = match events[i]
+                    .envelope
+                    .p
+                    .as_object()
+                    .and_then(|m| m.get("tool_input"))
+                {
+                    Some(serde_json::Value::String(s)) => s.clone(),
+                    Some(other) => crate::envelope::python_json_compact(other),
+                    None => String::new(),
+                };
 
                 if let Some(detected) = crate::enrich::skill::detect_skill(&tool_input_str) {
-                    if let serde_json::Value::Object(ref mut map) = events[i].envelope.p {
-                        map.insert(
-                            "skill_name".to_string(),
-                            serde_json::Value::String(detected.name),
-                        );
-                        if let Some(st) = detected.skill_type {
-                            map.insert(
-                                "skill_type".to_string(),
-                                serde_json::Value::String(st),
-                            );
-                        }
-                    }
+                    events[i].enriched.skill_name = Some(detected.name);
+                    events[i].enriched.skill_type = detected.skill_type;
                 }
             }
         }
@@ -1079,8 +1083,8 @@ mod tests {
     // -----------------------------------------------------------------------
 
     /// When `tool_input` is a JSON string containing a `.claude/skills/` path,
-    /// `enrich_session` must populate `skill_name` and `skill_type` in the
-    /// enriched event's envelope payload.
+    /// `enrich_session` must populate `skill_name` and `skill_type` on the
+    /// enriched event's typed `enriched` carrier (T09: post-Pass-1, pre-merge).
     ///
     /// Mirrors Python ingest.py lines 343-348.
     #[test]
@@ -1101,14 +1105,15 @@ mod tests {
         let result = enrich_session(vec![ev]);
         assert_eq!(result.len(), 1);
 
-        let p = &result[0].envelope.p;
+        // T09: skill fields are now on the typed enriched carrier, not in envelope.p
+        // (they will be merged into envelope.p at the persistence boundary).
         assert_eq!(
-            p.get("skill_name").and_then(serde_json::Value::as_str),
+            result[0].enriched.skill_name.as_deref(),
             Some("foo-skill"),
             "skill_name must be detected from string tool_input"
         );
         assert_eq!(
-            p.get("skill_type").and_then(serde_json::Value::as_str),
+            result[0].enriched.skill_type.as_deref(),
             Some("agent_definition"),
             "skill_type must be detected from agents/ path"
         );
@@ -1143,14 +1148,14 @@ mod tests {
         let result = enrich_session(vec![ev]);
         assert_eq!(result.len(), 1);
 
-        let p = &result[0].envelope.p;
+        // T09: skill fields are on the typed enriched carrier.
         assert_eq!(
-            p.get("skill_name").and_then(serde_json::Value::as_str),
+            result[0].enriched.skill_name.as_deref(),
             Some("base-instructions"),
             "skill_name must be detected from compact-serialized object tool_input"
         );
         assert_eq!(
-            p.get("skill_type").and_then(serde_json::Value::as_str),
+            result[0].enriched.skill_type.as_deref(),
             Some("system_skill"),
             "skill_type must be detected from system/ path"
         );
@@ -1161,7 +1166,8 @@ mod tests {
     // -----------------------------------------------------------------------
 
     /// When `skill_name` is already present in the payload (e.g. injected by a
-    /// hook upstream), `enrich_session` must NOT overwrite it.
+    /// hook upstream), `enrich_session` must NOT overwrite it — the `enriched`
+    /// typed carrier must remain None and the original JSON value is preserved.
     ///
     /// Mirrors Python: `if ev.get("skill_name") is None:`.
     #[test]
@@ -1184,16 +1190,23 @@ mod tests {
         let result = enrich_session(vec![ev]);
         assert_eq!(result.len(), 1);
 
+        // T09: the enriched carrier must be None because the JSON payload already
+        // had skill_name (detection was skipped).
+        assert!(
+            result[0].enriched.skill_name.is_none(),
+            "enriched.skill_name must be None when JSON payload already has skill_name"
+        );
+        // The original JSON value is preserved untouched.
         let p = &result[0].envelope.p;
         assert_eq!(
             p.get("skill_name").and_then(serde_json::Value::as_str),
             Some("upstream-skill"),
-            "pre-existing skill_name must not be overwritten"
+            "pre-existing skill_name in JSON payload must not be overwritten"
         );
         assert_eq!(
             p.get("skill_type").and_then(serde_json::Value::as_str),
             Some("project_skill"),
-            "pre-existing skill_type must not be overwritten"
+            "pre-existing skill_type in JSON payload must not be overwritten"
         );
     }
 
@@ -1202,7 +1215,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     /// When `tool_input` has no `.claude/skills/` path, neither `skill_name`
-    /// nor `skill_type` should be inserted into the payload.
+    /// nor `skill_type` should be set on the enriched carrier or the payload.
     #[test]
     fn skill_detection_no_match_leaves_fields_absent() {
         let ev = Envelope {
@@ -1221,14 +1234,24 @@ mod tests {
         let result = enrich_session(vec![ev]);
         assert_eq!(result.len(), 1);
 
+        // T09: no skill detected → enriched carrier fields must be None.
+        assert!(
+            result[0].enriched.skill_name.is_none(),
+            "enriched.skill_name must be None when no skill path is found"
+        );
+        assert!(
+            result[0].enriched.skill_type.is_none(),
+            "enriched.skill_type must be None when no skill path is found"
+        );
+        // Also verify the JSON payload is not polluted.
         let p = &result[0].envelope.p;
         assert!(
             p.get("skill_name").is_none(),
-            "skill_name must not be inserted when no skill path is found"
+            "skill_name must not be inserted into JSON payload when no skill path is found"
         );
         assert!(
             p.get("skill_type").is_none(),
-            "skill_type must not be inserted when no skill path is found"
+            "skill_type must not be inserted into JSON payload when no skill path is found"
         );
     }
 }

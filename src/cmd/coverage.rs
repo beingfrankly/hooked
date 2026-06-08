@@ -6,8 +6,8 @@
 //! envelopes by `agent_id`, and aggregates:
 //!
 //! - `reads`  — unique `file_path` values from Read / NotebookRead tool calls
-//! - `globs`  — unique `pattern` values from Glob tool calls
-//! - `greps`  — unique `pattern` values from Grep tool calls
+//! - `globs`  — redacted placeholders for unique Glob `pattern` values
+//! - `greps`  — redacted placeholders for unique Grep `pattern` values
 //! - `dirs`   — unique parent directories of every path in `reads`
 
 use std::collections::BTreeSet;
@@ -99,10 +99,14 @@ pub fn extract_coverage(envelopes: &[Envelope], agent_id: &str) -> Coverage {
 
     Coverage {
         reads: reads.into_iter().collect(),
-        globs: globs.into_iter().collect(),
-        greps: greps.into_iter().collect(),
+        globs: redacted_patterns(globs.len()),
+        greps: redacted_patterns(greps.len()),
         dirs: dirs.into_iter().collect(),
     }
+}
+
+fn redacted_patterns(count: usize) -> Vec<String> {
+    (1..=count).map(|idx| format!("<redacted:{idx}>")).collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -146,8 +150,7 @@ pub fn coverage(args: &CoverageArgs, fmt: &OutputFormat) -> anyhow::Result<()> {
 
     let mut all_envelopes: Vec<Envelope> = Vec::new();
     for path in &log_files {
-        let result = parse_jsonl_file(path)
-            .with_context(|| format!("parse {}", path.display()))?;
+        let result = parse_jsonl_file(path).with_context(|| format!("parse {}", path.display()))?;
         all_envelopes.extend(result.envelopes);
     }
 
@@ -317,8 +320,34 @@ mod tests {
             })),
         ];
         let cov = extract_coverage(&envs, "agent-abc");
-        assert_eq!(cov.globs, vec!["**/*.rs"]);
-        assert_eq!(cov.greps, vec!["fn main"]);
+        assert_eq!(cov.globs, vec!["<redacted:1>"]);
+        assert_eq!(cov.greps, vec!["<redacted:1>"]);
+    }
+
+    #[test]
+    fn glob_and_grep_patterns_are_redacted_but_counted() {
+        let envs = vec![
+            make_envelope(json!({
+                "agent_id": "agent-abc",
+                "tool_name": "Glob",
+                "tool_input": { "pattern": "**/secret-token-123.rs" }
+            })),
+            make_envelope(json!({
+                "agent_id": "agent-abc",
+                "tool_name": "Glob",
+                "tool_input": { "pattern": "**/another-sensitive-literal.rs" }
+            })),
+            make_envelope(json!({
+                "agent_id": "agent-abc",
+                "tool_name": "Grep",
+                "tool_input": { "pattern": "customer@example.com" }
+            })),
+        ];
+        let cov = extract_coverage(&envs, "agent-abc");
+        assert_eq!(cov.globs, vec!["<redacted:1>", "<redacted:2>"]);
+        assert_eq!(cov.greps, vec!["<redacted:1>"]);
+        assert!(!cov.globs.iter().any(|p| p.contains("secret")));
+        assert!(!cov.greps.iter().any(|p| p.contains("customer")));
     }
 
     #[test]

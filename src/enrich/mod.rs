@@ -18,5 +18,8 @@
 
 pub mod gitcfg;
 pub mod lineage;
+pub mod payload;
 pub mod session;
 pub mod skill;
+
+pub use payload::EnrichedPayload;

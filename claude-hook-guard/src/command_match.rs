@@ -34,6 +34,10 @@ fn normalize_known_patterns(tokens: &[String]) -> Vec<String> {
         let mut i = 1;
         while i < tokens.len() {
             if tokens[i] == "-C" || tokens[i] == "--directory" {
+                if i + 1 >= tokens.len() {
+                    out.extend(tokens[i..].iter().cloned());
+                    return out;
+                }
                 i += 2;
                 continue;
             }
@@ -128,6 +132,22 @@ mod tests {
     fn git_strips_dash_c_regression() {
         assert_eq!(
             normalize_known_patterns(&v(&["git", "-C", "/repo", "status"])),
+            v(&["git", "status"])
+        );
+    }
+
+    #[test]
+    fn bd_dangling_dash_c_is_preserved() {
+        assert_eq!(
+            normalize_known_patterns(&v(&["bd", "-C"])),
+            v(&["bd", "-C"])
+        );
+    }
+
+    #[test]
+    fn git_repeated_dash_c_flags_are_stripped() {
+        assert_eq!(
+            normalize_known_patterns(&v(&["git", "-C", "/a", "-C", "/b", "status"])),
             v(&["git", "status"])
         );
     }

@@ -187,12 +187,12 @@ pub fn insert_event(conn: &Connection, event: &EnrichedEvent) -> anyhow::Result<
         _ => 0,
     };
 
-    // Enrichment fields (set externally before calling insert_event;
-    // they live on the Envelope itself or are carried as additional fields
-    // the caller must provide). For now we read from payload fallbacks
-    // since EnrichedEvent doesn't yet carry git/config enrichment fields.
-    // Those will be filled by the caller via the envelope payload fields
-    // once the git/config enrichment pass is applied.
+    // Enrichment-derived fields.  After T09, typed values are written to
+    // `EnrichedEvent::enriched` during enrichment and merged into
+    // `envelope.p` by `merge_enriched_into_payloads` at the persistence
+    // boundary, before `insert_event` runs.  Reading from `envelope.p`
+    // here lets us treat hook-injected and enrichment-derived fields
+    // uniformly.
     let config_version: Option<String> = p_str("config_version");
     let git_branch: Option<String> = p_str("git_branch");
     let git_commit: Option<String> = p_str("git_commit");
@@ -546,6 +546,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::enrich::payload::EnrichedPayload;
     use crate::enrich::session::{EnrichedEvent, FieldIsolation};
     use crate::envelope::Envelope;
     use crate::schema::SCHEMA_V4_DDL;
@@ -578,6 +579,7 @@ mod tests {
         };
         EnrichedEvent {
             envelope,
+            enriched: EnrichedPayload::default(),
             sequence_num: 0,
             isolation: FieldIsolation::default(),
             duration_ms: None,

@@ -151,7 +151,7 @@ commands = { categories = [] }
 aliases = ["git"]
 tools = ["Read", "Bash", "Skill"]
 mcp-tools = []
-commands = { categories = ["git-read", "git-local-write", "git-rebase", "git-push", "worktrunk"] }
+commands = { categories = ["git-read", "git-local-write", "git-rebase", "git-push", "github-cli-read", "worktrunk"] }
 
 [profiles.notes]
 aliases = ["notes"]
@@ -272,6 +272,22 @@ allow = [
 [command-categories.git-push]
 allow = [
   ["git", "push"],
+]
+
+[command-categories.github-cli-read]
+allow = [
+  ["gh", "auth", "status"],
+  ["gh", "issue", "list"],
+  ["gh", "issue", "status"],
+  ["gh", "issue", "view"],
+  ["gh", "pr", "checks"],
+  ["gh", "pr", "diff"],
+  ["gh", "pr", "list"],
+  ["gh", "pr", "status"],
+  ["gh", "pr", "view"],
+  ["gh", "repo", "view"],
+  ["gh", "run", "list"],
+  ["gh", "run", "view"],
 ]
 
 [command-categories.worktrunk]

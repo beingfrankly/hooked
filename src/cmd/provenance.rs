@@ -130,7 +130,9 @@ pub fn compute_metrics(
             Some(Value::Object(map)) => map,
             _ => continue,
         };
-        // Truncation marker: {"_t":…,"_b":…}
+        // Truncation markers never carry a usable file_path. Keep the explicit
+        // guard so this path documents the intentional skip instead of relying
+        // on the file_path match below.
         if tool_input.contains_key("_t") || tool_input.contains_key("_b") {
             continue;
         }
@@ -302,15 +304,11 @@ pub fn provenance(args: &ProvenanceArgs, fmt: &OutputFormat) -> anyhow::Result<(
     // 2. Parse all envelopes.
     let mut all_envelopes: Vec<Envelope> = Vec::new();
     for path in &log_paths {
-        let result = parse_jsonl_file(path)
-            .with_context(|| format!("parse {}", path.display()))?;
+        let result = parse_jsonl_file(path).with_context(|| format!("parse {}", path.display()))?;
         all_envelopes.extend(result.envelopes);
     }
 
-    let log_files_read: Vec<String> = log_paths
-        .iter()
-        .map(|p| p.display().to_string())
-        .collect();
+    let log_files_read: Vec<String> = log_paths.iter().map(|p| p.display().to_string()).collect();
 
     // 3. Compute metrics (pure, no I/O).
     let report = compute_metrics(&all_envelopes, args.days, log_files_read);
@@ -417,7 +415,12 @@ mod tests {
         }
     }
 
-    fn pre_tool_use(session_id: &str, agent_type: &str, tool_name: &str, file_path: &str) -> Envelope {
+    fn pre_tool_use(
+        session_id: &str,
+        agent_type: &str,
+        tool_name: &str,
+        file_path: &str,
+    ) -> Envelope {
         make_envelope(json!({
             "hook_event_name": "PreToolUse",
             "session_id": session_id,
@@ -446,7 +449,10 @@ mod tests {
         assert_eq!(s.worker_read_count, 3);
         let overlap = s.reexploration_overlap.expect("should have overlap");
         let expected = 2.0 / 3.0;
-        assert!((overlap - expected).abs() < 1e-9, "overlap={overlap}, expected={expected}");
+        assert!(
+            (overlap - expected).abs() < 1e-9,
+            "overlap={overlap}, expected={expected}"
+        );
         assert_eq!(report.sessions_with_both, 1);
     }
 
@@ -510,7 +516,10 @@ mod tests {
             "tool_input": { "_t": "truncated", "_b": "123" }
         }))];
         let report = compute_metrics(&envs, 7, vec![]);
-        assert!(report.sessions.is_empty(), "truncated input should produce no sessions");
+        assert!(
+            report.sessions.is_empty(),
+            "truncated input should produce no sessions"
+        );
     }
 
     #[test]

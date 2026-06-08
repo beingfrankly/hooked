@@ -550,10 +550,7 @@ fn search_denies_shell_search_exec_or_write_actions() {
             r#"find /tmp -name snacks.lua -exec rm {} +"#,
             "find actions that execute commands or write files",
         ),
-        (
-            r#"fd snacks /tmp -x rm"#,
-            "fd exec actions are not allowed",
-        ),
+        (r#"fd snacks /tmp -x rm"#, "fd exec actions are not allowed"),
         (
             r#"rg --pre ./render-markdown "Lazy" /tmp"#,
             "rg preprocessors are not allowed",
@@ -1131,6 +1128,74 @@ fn git_allows_merge_for_git_profile() {
         },
     );
     assert!(engine.evaluate(&input).is_none());
+}
+
+#[test]
+fn git_profile_allows_read_only_github_cli() {
+    let config = default_config();
+    let engine = Engine { config: &config };
+
+    for command in [
+        "gh auth status",
+        "gh pr view 123 --json headRefName,baseRefName",
+        "gh pr checks 123",
+        "gh pr diff 123",
+        "gh issue list --state open",
+        "gh repo view owner/repo",
+        "gh run view 456 --log",
+    ] {
+        let input = hook(
+            "Bash",
+            Some("git"),
+            ToolInput {
+                command: Some(command.to_string()),
+                ..ToolInput::default()
+            },
+        );
+        assert!(
+            engine.evaluate(&input).is_none(),
+            "git profile should allow GitHub CLI read command: {command}"
+        );
+    }
+}
+
+#[test]
+fn github_cli_is_not_global_bash_access() {
+    let config = default_config();
+    let engine = Engine { config: &config };
+
+    for profile in ["main", "worker", "reviewer"] {
+        let input = hook(
+            "Bash",
+            Some(profile),
+            ToolInput {
+                command: Some("gh pr view 123".to_string()),
+                ..ToolInput::default()
+            },
+        );
+        assert!(
+            engine.evaluate(&input).is_some(),
+            "profile {profile} should not get gh access from git profile rules"
+        );
+    }
+}
+
+#[test]
+fn git_profile_denies_mutating_github_cli_by_default() {
+    let config = default_config();
+    let engine = Engine { config: &config };
+    let input = hook(
+        "Bash",
+        Some("git"),
+        ToolInput {
+            command: Some("gh pr close 123".to_string()),
+            ..ToolInput::default()
+        },
+    );
+    let reason = engine
+        .evaluate(&input)
+        .expect("mutating gh command should be denied");
+    assert!(reason.contains("not allowed"));
 }
 
 #[test]

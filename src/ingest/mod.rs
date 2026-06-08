@@ -179,27 +179,40 @@ fn apply_git_and_config(by_session: &mut HashMap<String, Vec<EnrichedEvent>>) {
 
         let git_ctx = git_cache.get(&cwd_key).and_then(|o| o.as_ref());
 
-        // Inject into each event's payload — mirrors Python's dict mutation.
+        // T09: write typed values onto each event's enriched payload (no JSON mutation).
+        // The merge into envelope.p happens at the persistence boundary via
+        // merge_enriched_into_payloads.
+        for ev in evs.iter_mut() {
+            ev.enriched.config_version = Some(config_ver.clone());
+            if let Some(ctx) = git_ctx {
+                if let Some(branch) = &ctx.branch {
+                    ev.enriched.git_branch = Some(branch.clone());
+                }
+                if let Some(commit) = &ctx.commit_sha {
+                    ev.enriched.git_commit = Some(commit.clone());
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// merge_enriched_into_payloads (private)
+// ---------------------------------------------------------------------------
+
+/// T09: single persistence-boundary merge of typed enriched fields back into
+/// `envelope.p`, in the order that preserves byte-identical parity with the
+/// Python reference.
+///
+/// This is the ONLY place that mutates `envelope.p` after initial construction.
+/// It must be called immediately after `apply_git_and_config` and BEFORE any
+/// code reads `envelope.p` for persistence (insert_event / build_session_rows /
+/// build_tool_call_rows).
+fn merge_enriched_into_payloads(by_session: &mut HashMap<String, Vec<EnrichedEvent>>) {
+    for (_sid, evs) in by_session.iter_mut() {
         for ev in evs.iter_mut() {
             if let Some(obj) = ev.envelope.p.as_object_mut() {
-                obj.insert(
-                    "config_version".to_owned(),
-                    serde_json::Value::String(config_ver.clone()),
-                );
-                if let Some(ctx) = git_ctx {
-                    if let Some(branch) = &ctx.branch {
-                        obj.insert(
-                            "git_branch".to_owned(),
-                            serde_json::Value::String(branch.clone()),
-                        );
-                    }
-                    if let Some(commit) = &ctx.commit_sha {
-                        obj.insert(
-                            "git_commit".to_owned(),
-                            serde_json::Value::String(commit.clone()),
-                        );
-                    }
-                }
+                ev.enriched.merge_into(obj);
             }
         }
     }
@@ -585,8 +598,14 @@ pub fn ingest_file(conn: &mut Connection, path: &Path) -> anyhow::Result<IngestS
         enriched_by_session.insert(sid, enriched);
     }
 
-    // 5. Git + config enrichment (I/O) — injects into each event's payload
+    // 5. Git + config enrichment (I/O) — writes typed fields to enriched carrier
     apply_git_and_config(&mut enriched_by_session);
+
+    // 5b. T09: persistence-boundary merge — merge typed enriched fields into
+    //     envelope.p exactly once, in parity-preserving insertion order.
+    //     This must happen BEFORE build_session_rows / build_tool_call_rows /
+    //     insert_event, all of which read from envelope.p.
+    merge_enriched_into_payloads(&mut enriched_by_session);
 
     // 6. Build session and tool-call rows BEFORE lineage (so we have cwd/model etc.)
     let mut session_rows = build_session_rows(&enriched_by_session);
@@ -793,8 +812,8 @@ pub fn ingest_all_unprocessed() -> anyhow::Result<IngestAllStats> {
 
     // 2. Open DB and initialise schema (single open via open_db_at).
     let db = db_path();
-    let mut conn = crate::dbh::open_db_at(&db)
-        .with_context(|| format!("open database {:?}", db))?;
+    let mut conn =
+        crate::dbh::open_db_at(&db).with_context(|| format!("open database {:?}", db))?;
 
     // 3. Determine today's date string (UTC) — files with this date are skipped.
     let today_str = chrono::Utc::now().format("%Y-%m-%d").to_string();
